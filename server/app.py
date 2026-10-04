@@ -1,8 +1,9 @@
 from fastapi import FastAPI
-from .routers import applications
+from .routers import applications, emails
 
 
 app = FastAPI()
+app.include_router(emails.router)
 app.include_router(applications.router)
 
 @app.get("/test")
