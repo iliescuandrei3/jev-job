@@ -11,8 +11,8 @@ from googleapiclient.errors import HttpError
 
 _SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.labels"]
 # Keep headroom below the 6,000 units/minute per-user quota
-_QUOTA_LIMIT = 5400
-_QUOTA_LIMIT_PERIOD = 60
+_QUOTA_LIMIT = 20
+_QUOTA_LIMIT_PERIOD = 60 / (6000 / 20) + 0.15 # time_window / (total_quota_per_time_window / max_quota_per_req) + safety
 _QUOTA_COSTS = {
     'messages.get': 20,
     'messages.list': 5,

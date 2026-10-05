@@ -62,18 +62,17 @@ async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
     )
     emails = []
     for count, message_id in enumerate(emails_ids):
-            if (count + 1) % 100 == 0:
-                await ws_manager.broadcast_progress(
-                    job_id, 
-                    JobState(
-                        status="running", 
-                        task_name="Sync emails", 
-                        message=f"Fetching emails {count + 1}/{len(emails_ids)}."
-                    )
+            await ws_manager.broadcast_progress(
+                job_id, 
+                JobState(
+                    status="running", 
+                    task_name="Sync emails", 
+                    message=f"Fetching emails {count + 1}/{len(emails_ids)}."
                 )
+            )
                 
             # todo: remove this
-            if count == 250:
+            if count == 300:
                 break
 
             result = await gmail_client.get_email(message_id)
@@ -81,6 +80,7 @@ async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
 
     print(f"Emails fetched: {len(emails)}")
 
+    # todo: this state might be duplicated in routers
     await ws_manager.broadcast_progress(
         job_id, 
         JobState(
