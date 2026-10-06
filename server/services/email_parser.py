@@ -58,13 +58,13 @@ def parse_emails(emails: list[dict], labels: list[dict]) -> list[dict]:
             "threadId": email["threadId"],
             "labels": [labels_map.get(label_id, label_id) for label_id in email.get("labelIds", [])],
             "snippet": email["snippet"],
+            # todo: parse string either here or when needing it
             "date": _get_from_headers(headers, "Date"),
             "subject": _get_from_headers(headers, "Subject"),
-            "to_address": to_address,
-            "to_name": to_name,
-            "from_address": from_address,
-            "from_name": from_name,
-            "from": _get_from_headers(headers, "From"),
+            "toAddress": to_address,
+            "toName": to_name,
+            "fromAddress": from_address,
+            "fromName": from_name,
             "content": _get_content_from_parts(payload, "text/plain")
         })
 

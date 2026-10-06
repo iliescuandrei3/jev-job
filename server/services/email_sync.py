@@ -1,4 +1,5 @@
 from server.apis.gmail import GmailClient
+from server.db.mongo_client import add_emails, init_db
 from server.schemas.websocket import JobState
 from server.services.email_parser import parse_emails
 from server.websocket import ConnectionManager
@@ -94,7 +95,8 @@ async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
     # todo: add jev decisions before saving
     emails_with_decisinos = parsed_emails
     # Save to db
-    # todo: add persistance
+    await add_emails(emails_with_decisinos)
+    
 
 
 async def sync_latest_emails(ws_manager: ConnectionManager, job_id: str, history_id: str):
