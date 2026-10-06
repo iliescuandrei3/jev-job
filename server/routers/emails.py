@@ -9,7 +9,7 @@ from fastapi import (
 )
 
 from server.schemas.websocket import JobState
-from server.services import emails
+from server.services import email_sync
 from server.websocket import ActiveJobInProgress, ConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -25,9 +25,9 @@ ws_manager = ConnectionManager()
 async def _run_refresh(job_id: str, latest_history_id: str | None) -> None:
     try:
         if latest_history_id is None:
-            await emails.sync_all_emails(ws_manager, job_id)
+            await email_sync.sync_all_emails(ws_manager, job_id)
         else:
-            emails.sync_latest_emails(ws_manager, job_id, latest_history_id)
+            await email_sync.sync_latest_emails(ws_manager, job_id, latest_history_id)
 
         current_state = ws_manager.get_job_state(job_id)
         if current_state is None or current_state.status not in ("completed", "failed"):

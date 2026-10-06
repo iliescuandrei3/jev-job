@@ -1,26 +1,9 @@
-import base64
-import json
-
 from server.apis.gmail import GmailClient
 from server.schemas.websocket import JobState
+from server.services.email_parser import parse_emails
 from server.websocket import ConnectionManager
 
-def _get_from_headers(headers: dict, key: str) -> str:
-    for header in headers:
-        if header["name"] == key:
-            return header["value"]
-    return ""
-
-def _decode_base64(value: str) -> str:
-    padded_value = value + "=" * (-len(value) % 4)
-    return base64.urlsafe_b64decode(padded_value).decode("utf-8")
-
-async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
-    # todo: add exception handler
-    # todo: notify on ws if failed
-    gmail_client = await GmailClient.create()
-
-    # Get all ids
+async def _get_emails_ids(gmail_client: GmailClient, ws_manager: ConnectionManager, job_id: str) -> tuple[list[str], str]:
     emails_ids = []
     page_count = 1
     batch, next_page_token = await gmail_client.get_email_ids(500, None)
@@ -51,7 +34,9 @@ async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
             )
         )
 
-    # Get all emails
+    return emails_ids, latest_email_id
+
+async def _get_emails(gmail_client: GmailClient, ws_manager: ConnectionManager, job_id: str, emails_ids: list[str]) -> list[dict]:
     await ws_manager.broadcast_progress(
         job_id, 
         JobState(
@@ -72,24 +57,45 @@ async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
             )
                 
             # todo: remove this
-            if count == 300:
+            if count == 5:
                 break
 
             result = await gmail_client.get_email(message_id)
             emails.append(result)
 
-    print(f"Emails fetched: {len(emails)}")
+    return emails
 
-    # todo: this state might be duplicated in routers
+async def _get_labels(gmail_client: GmailClient, ws_manager: ConnectionManager, job_id: str) -> list[dict[str, object]]:
     await ws_manager.broadcast_progress(
         job_id, 
         JobState(
-            status="completed", 
+            status="running", 
             task_name="Sync emails", 
-            message=f"Fetching emails {len(emails_ids)}/{len(emails_ids)}."
+            message=f"Fetching labels ..."
         )
     )
 
+    return await gmail_client.get_labels()
+    
 
-def sync_latest_emails(ws_manager: ConnectionManager, job_id: str, history_id: str):
+async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
+    # todo: add exception handler
+    gmail_client = await GmailClient.create()
+
+    # Get all ids
+    emails_ids, latest_email_id = await _get_emails_ids(gmail_client, ws_manager, job_id)
+    # Get all emails
+    emails = await _get_emails(gmail_client, ws_manager, job_id, emails_ids)
+    # Get email labels
+    labels = await _get_labels(gmail_client, ws_manager, job_id)
+    # Parse eails
+    parsed_emails = parse_emails(emails, labels)
+    # Make decisions
+    # todo: add jev decisions before saving
+    emails_with_decisinos = parsed_emails
+    # Save to db
+    # todo: add persistance
+
+
+async def sync_latest_emails(ws_manager: ConnectionManager, job_id: str, history_id: str):
     pass
