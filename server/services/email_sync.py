@@ -2,7 +2,7 @@ from server.apis.gmail import GmailClient
 from server.db.emails import add_emails
 from server.schemas.email import ParsedEmail
 from server.schemas.websocket import JobState
-from server.services.email_decision import decide_emails
+from server.services.email_decision import decide_email_application
 from server.services.email_parser import parse_emails
 from server.websocket import ConnectionManager
 
@@ -60,7 +60,7 @@ async def _get_emails(gmail_client: GmailClient, ws_manager: ConnectionManager, 
             )
                 
             # todo: remove this
-            if count == 5:
+            if count == 100:
                 break
 
             result = await gmail_client.get_email(message_id)
@@ -74,24 +74,26 @@ async def _get_labels(gmail_client: GmailClient, ws_manager: ConnectionManager, 
         JobState(
             status="running", 
             task_name="Sync emails", 
-            message=f"Fetching labels ..."
+            message="Fetching labels ..."
         )
     )
 
     return await gmail_client.get_labels()
 
 async def _make_decisions(ws_manager: ConnectionManager, job_id: str, emails: list[ParsedEmail]):
-    await ws_manager.broadcast_progress(
-        job_id, 
-        JobState(
-            status="running", 
-            task_name="Sync emails", 
-            message=f"Awaiting email decisions ..."
+    for count, email in enumerate(emails):
+        await ws_manager.broadcast_progress(
+            job_id, 
+            JobState(
+                status="running", 
+                task_name="Sync emails", 
+                message=f"Awaiting email decisions {count + 1}/{len(emails)}."
+            )
         )
-    )
-    emails_with_decisions = await decide_emails(emails)
+        decision = await decide_email_application(email)
+        email.isJob = decision.nouls["isJob"].noul
     
-    return emails_with_decisions
+    return emails
     
 
 async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):

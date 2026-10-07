@@ -5,7 +5,7 @@ from typesafe_sdk import Noul
 from server.apis.jev import decide
 from server.schemas.email import ParsedEmail
 
-async def _decide_email_application(email: ParsedEmail) -> Any:
+async def decide_email_application(email: ParsedEmail) -> Any:
     state = email.model_dump(exclude={"content"})
     questions = {
         "isJob": Noul(
@@ -18,10 +18,4 @@ async def _decide_email_application(email: ParsedEmail) -> Any:
     }
 
     return await decide(state, questions)
-
-async def decide_emails(emails: list[ParsedEmail]) -> list[ParsedEmail]:
-    for email in emails:
-        decision = await _decide_email_application(email)
-        email.isJob = decision.nouls["isJob"].noul
-
-    return emails
+    
