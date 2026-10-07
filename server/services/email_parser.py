@@ -2,6 +2,8 @@ import base64
 import re
 from collections import deque
 
+from server.schemas.email import ParsedEmail
+
 
 def _decode_base64(value: str) -> str:
     padded_value = value + "=" * (-len(value) % 4)
@@ -42,7 +44,7 @@ def _parse_email_address(value: str) -> tuple[str, str]:
     rest = (value[:match.start()] + value[match.end():]).strip().strip('<>"\' ')
     return match.group(), rest
 
-def parse_emails(emails: list[dict], labels: list[dict]) -> list[dict]:
+def parse_emails(emails: list[dict], labels: list[dict]) -> list[ParsedEmail]:
     labels_map = {label["id"]: label["name"] for label in labels}
 
     parsed = []
@@ -53,7 +55,7 @@ def parse_emails(emails: list[dict], labels: list[dict]) -> list[dict]:
         to_address, to_name = _parse_email_address(_get_from_headers(headers, "To"))
         from_address, from_name = _parse_email_address(_get_from_headers(headers, "From"))
 
-        parsed.append({
+        parsed.append(ParsedEmail(**{
             "id": email["id"],
             "threadId": email["threadId"],
             "labels": [labels_map.get(label_id, label_id) for label_id in email.get("labelIds", [])],
@@ -66,6 +68,6 @@ def parse_emails(emails: list[dict], labels: list[dict]) -> list[dict]:
             "fromAddress": from_address,
             "fromName": from_name,
             "content": _get_content_from_parts(payload, "text/plain")
-        })
+        }))
 
     return parsed

@@ -1,5 +1,5 @@
 from server.apis.gmail import GmailClient
-from server.db.mongo_client import add_emails, init_db
+from server.db.emails import add_emails
 from server.schemas.websocket import JobState
 from server.services.email_parser import parse_emails
 from server.websocket import ConnectionManager
