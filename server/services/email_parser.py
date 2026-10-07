@@ -56,7 +56,7 @@ def parse_emails(emails: list[dict], labels: list[dict]) -> list[ParsedEmail]:
         from_address, from_name = _parse_email_address(_get_from_headers(headers, "From"))
 
         parsed.append(ParsedEmail(**{
-            "id": email["id"],
+            "emailId": email["id"],
             "threadId": email["threadId"],
             "labels": [labels_map.get(label_id, label_id) for label_id in email.get("labelIds", [])],
             "snippet": email["snippet"],

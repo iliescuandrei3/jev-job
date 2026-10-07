@@ -1,6 +1,8 @@
 from beanie import Document
+from typing import Optional
 
 class Email(Document):
+    emailId: str
     threadId: str
     labels: list[str]
     snippet: str
@@ -11,6 +13,7 @@ class Email(Document):
     fromAddress: str
     fromName: str
     # content: str
+    isJob: Optional[float] = None
 
     class Settings:
         name = "emails"

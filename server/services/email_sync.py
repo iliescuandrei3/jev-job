@@ -1,6 +1,8 @@
 from server.apis.gmail import GmailClient
 from server.db.emails import add_emails
+from server.schemas.email import ParsedEmail
 from server.schemas.websocket import JobState
+from server.services.email_decision import decide_emails
 from server.services.email_parser import parse_emails
 from server.websocket import ConnectionManager
 
@@ -77,6 +79,19 @@ async def _get_labels(gmail_client: GmailClient, ws_manager: ConnectionManager, 
     )
 
     return await gmail_client.get_labels()
+
+async def _make_decisions(ws_manager: ConnectionManager, job_id: str, emails: list[ParsedEmail]):
+    await ws_manager.broadcast_progress(
+        job_id, 
+        JobState(
+            status="running", 
+            task_name="Sync emails", 
+            message=f"Awaiting email decisions ..."
+        )
+    )
+    emails_with_decisions = await decide_emails(emails)
+    
+    return emails_with_decisions
     
 
 async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
@@ -92,8 +107,7 @@ async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
     # Parse eails
     parsed_emails = parse_emails(emails, labels)
     # Make decisions
-    # todo: add jev decisions before saving
-    emails_with_decisinos = parsed_emails
+    emails_with_decisinos = await _make_decisions(ws_manager, job_id, parsed_emails)
     # Save to db
     await add_emails(emails_with_decisinos)
     

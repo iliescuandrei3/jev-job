@@ -1,10 +1,11 @@
 from pydantic import BaseModel, ConfigDict
+from typing import Optional
 
 
 class ParsedEmail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    id: str
+    emailId: str
     threadId: str
     labels: list[str]
     snippet: str
@@ -15,3 +16,4 @@ class ParsedEmail(BaseModel):
     fromAddress: str
     fromName: str
     content: list[str]
+    isJob: Optional[float] = None
