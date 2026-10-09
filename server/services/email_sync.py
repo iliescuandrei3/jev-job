@@ -1,10 +1,14 @@
 from server.apis.gmail import GmailClient
+from server.apis.openrouter import openrouter
 from server.db.emails import add_emails
 from server.schemas.email import ParsedEmail
 from server.schemas.websocket import JobState
 from server.services.email_decision import decide_email_application
 from server.services.email_parser import parse_emails
+from server.services.email_status import get_email_status
 from server.websocket import ConnectionManager
+
+_IS_JOB_THRESHOLD = 0.5
 
 async def _get_emails_ids(gmail_client: GmailClient, ws_manager: ConnectionManager, job_id: str) -> tuple[list[str], str]:
     emails_ids = []
@@ -60,7 +64,7 @@ async def _get_emails(gmail_client: GmailClient, ws_manager: ConnectionManager, 
             )
                 
             # todo: remove this
-            if count == 100:
+            if count == 50:
                 break
 
             result = await gmail_client.get_email(message_id)
@@ -80,7 +84,7 @@ async def _get_labels(gmail_client: GmailClient, ws_manager: ConnectionManager, 
 
     return await gmail_client.get_labels()
 
-async def _make_decisions(ws_manager: ConnectionManager, job_id: str, emails: list[ParsedEmail]):
+async def _make_decisions(ws_manager: ConnectionManager, job_id: str, emails: list[ParsedEmail]) -> list[ParsedEmail]:
     for count, email in enumerate(emails):
         await ws_manager.broadcast_progress(
             job_id, 
@@ -94,7 +98,25 @@ async def _make_decisions(ws_manager: ConnectionManager, job_id: str, emails: li
         email.isJob = decision.nouls["isJob"].noul
     
     return emails
-    
+
+async def _get_email_status(ws_manager: ConnectionManager, job_id: str, emails: list[ParsedEmail]) -> list[ParsedEmail]:
+    with openrouter() as client:
+        for count, email in enumerate(emails):
+            await ws_manager.broadcast_progress(
+                job_id, 
+                JobState(
+                    status="running", 
+                    task_name="Sync emails", 
+                    message=f"Awaiting email statuses {count + 1}/{len(emails)}."
+                )
+            )
+            email_status = await get_email_status(client, email)
+            email.applicationStatus = email_status.applicationStatus
+            email.company = email_status.company
+            email.role = email_status.role
+
+    return emails
+        
 
 async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
     # todo: add exception handler
@@ -110,8 +132,12 @@ async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
     parsed_emails = parse_emails(emails, labels)
     # Make decisions
     emails_with_decisinos = await _make_decisions(ws_manager, job_id, parsed_emails)
+    # Filter non-job related emails
+    job_emails = filter(lambda email: email.isJob >= _IS_JOB_THRESHOLD, emails_with_decisinos)
+    # Get email statueses
+    emails_with_status = await _get_email_status(ws_manager, job_id, job_emails)
     # Save to db
-    await add_emails(emails_with_decisinos)
+    await add_emails(emails_with_status)
     
 
 
