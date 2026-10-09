@@ -23,9 +23,9 @@ class ParsedEmail(BaseModel):
     fromName: str
     content: list[str]
     isJob: Optional[float] = None
-    applicationStatus: ApplicationStatus
-    company: str # todo: explore if a different type would work better
-    role: str # todo: explore if a different type would work better
+    applicationStatus: Optional[ApplicationStatus] = ApplicationStatus.Undefined
+    company: Optional[str] = "" # todo: explore if a different type would work better
+    role: Optional[str] = "" # todo: explore if a different type would work better
 
     model_config = ConfigDict(
         extra="forbid", 

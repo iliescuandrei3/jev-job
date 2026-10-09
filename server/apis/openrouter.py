@@ -9,7 +9,7 @@ from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
-_MODEL = "apodex/apodex-1.1-mini:free"
+_MODEL = "apodex/apodex-1.1-mini:free" # todo: find a different free model with zdr that supports pydantic
 _ROUTING = {"models": ["mistralai/mistral-nemo"]}
 
 load_dotenv()
@@ -23,7 +23,7 @@ async def openrouter():
     try:
         yield client
     finally:
-        client.close()
+        await client.close()
 
 async def structured_output(
     client: AsyncOpenAI,

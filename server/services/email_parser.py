@@ -3,6 +3,7 @@ import re
 from collections import deque
 
 from server.schemas.email import ParsedEmail
+from server.services.redact import redact
 
 
 def _decode_base64(value: str) -> str:
@@ -67,7 +68,10 @@ def parse_emails(emails: list[dict], labels: list[dict]) -> list[ParsedEmail]:
             "toName": to_name,
             "fromAddress": from_address,
             "fromName": from_name,
-            "content": _get_content_from_parts(payload, "text/plain")
+            "content": [
+                redact(part)
+                for part in _get_content_from_parts(payload, "text/plain")
+            ]
         }))
 
     return parsed

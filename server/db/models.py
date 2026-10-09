@@ -14,11 +14,11 @@ class Email(Document):
     toName: str
     fromAddress: str
     fromName: str
-    # content: str
+    content: list[str] = ""
     isJob: Annotated[Optional[float], Indexed()] = None
-    applicationStatus: ApplicationStatus
-    company: Annotated[str, Indexed()]
-    role: Annotated[str, Indexed()]
+    applicationStatus: ApplicationStatus = ApplicationStatus.Undefined
+    company: Annotated[str, Indexed()] = ""
+    role: Annotated[str, Indexed()] = ""
 
     class Settings:
         name = "emails"

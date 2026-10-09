@@ -1,6 +1,6 @@
 from server.apis.gmail import GmailClient
 from server.apis.openrouter import openrouter
-from server.db.emails import add_emails
+from server.db.emails import add_emails, get_emails
 from server.schemas.email import ParsedEmail
 from server.schemas.websocket import JobState
 from server.services.email_decision import decide_email_application
@@ -64,7 +64,7 @@ async def _get_emails(gmail_client: GmailClient, ws_manager: ConnectionManager, 
             )
                 
             # todo: remove this
-            if count == 50:
+            if count == 100:
                 break
 
             result = await gmail_client.get_email(message_id)
@@ -100,7 +100,7 @@ async def _make_decisions(ws_manager: ConnectionManager, job_id: str, emails: li
     return emails
 
 async def _get_email_status(ws_manager: ConnectionManager, job_id: str, emails: list[ParsedEmail]) -> list[ParsedEmail]:
-    with openrouter() as client:
+    async with openrouter() as client:
         for count, email in enumerate(emails):
             await ws_manager.broadcast_progress(
                 job_id, 
@@ -133,7 +133,12 @@ async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
     # Make decisions
     emails_with_decisinos = await _make_decisions(ws_manager, job_id, parsed_emails)
     # Filter non-job related emails
-    job_emails = filter(lambda email: email.isJob >= _IS_JOB_THRESHOLD, emails_with_decisinos)
+    job_emails = [email for email in emails_with_decisinos if email.isJob >= _IS_JOB_THRESHOLD]
+
+    # mock for testing
+    # emails = await get_emails()
+    # job_emails = [ParsedEmail(**email.model_dump(exclude={"id"})) for email in emails]
+
     # Get email statueses
     emails_with_status = await _get_email_status(ws_manager, job_id, job_emails)
     # Save to db
