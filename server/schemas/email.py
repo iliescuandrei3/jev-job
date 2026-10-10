@@ -1,6 +1,7 @@
 from enum import Enum
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
+from datetime import datetime
 
 class ApplicationStatus(str, Enum):
     Undefined = "undefined"
@@ -15,7 +16,8 @@ class ParsedEmail(BaseModel):
     threadId: str
     labels: list[str]
     snippet: str
-    date: str
+    date: datetime
+    internalDate: str
     subject: str
     toAddress: str
     toName: str

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from beanie import Document, Indexed
 from typing import Annotated, Optional
 
@@ -8,7 +10,8 @@ class Email(Document):
     threadId: str
     labels: list[str]
     snippet: str
-    date: str
+    date: datetime
+    internalDate: str
     subject: str
     toAddress: str
     toName: str

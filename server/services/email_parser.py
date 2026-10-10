@@ -1,4 +1,5 @@
 import base64
+from datetime import datetime, timezone
 import re
 from collections import deque
 
@@ -61,8 +62,8 @@ def parse_emails(emails: list[dict], labels: list[dict]) -> list[ParsedEmail]:
             "threadId": email["threadId"],
             "labels": [labels_map.get(label_id, label_id) for label_id in email.get("labelIds", [])],
             "snippet": email["snippet"],
-            # todo: parse string either here or when needing it
-            "date": _get_from_headers(headers, "Date"),
+            "date": datetime.fromtimestamp(int(email["internalDate"]) / 1000, tz=timezone.utc),
+            "internalDate": email["internalDate"],
             "subject": _get_from_headers(headers, "Subject"),
             "toAddress": to_address,
             "toName": to_name,
