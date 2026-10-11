@@ -1,5 +1,8 @@
-from server.apis.gmail import GmailClient
+import json
+
+from server.apis.gmail import GmailClient, HistoryType
 from server.apis.openrouter import openrouter
+from server.db.checkpoint import get_history_checkpoint, update_history_checkpoint
 from server.db.emails import add_emails, get_emails
 from server.schemas.email import ParsedEmail
 from server.schemas.websocket import JobState
@@ -14,7 +17,7 @@ async def _get_emails_ids(gmail_client: GmailClient, ws_manager: ConnectionManag
     emails_ids = []
     page_count = 1
     batch, next_page_token = await gmail_client.get_email_ids(500, None)
-    latest_email_id = batch[0]["id"]
+    latest_history_id = batch[0]["historyId"]
     emails_ids.extend([item["id"] for item in batch])
     
     await ws_manager.broadcast_progress(
@@ -27,9 +30,8 @@ async def _get_emails_ids(gmail_client: GmailClient, ws_manager: ConnectionManag
     )
 
     while next_page_token is not None:
-        batch, page_token = await gmail_client.get_email_ids(500, next_page_token)
+        batch, next_page_token = await gmail_client.get_email_ids(500, next_page_token)
         emails_ids.extend([item["id"] for item in batch])
-        next_page_token = page_token
         page_count += 1
 
         await ws_manager.broadcast_progress(
@@ -41,7 +43,38 @@ async def _get_emails_ids(gmail_client: GmailClient, ws_manager: ConnectionManag
             )
         )
 
-    return emails_ids, latest_email_id
+    return emails_ids, latest_history_id
+
+async def _get_history_ids(gmail_client: GmailClient, ws_manager: ConnectionManager, job_id: str, start_history_id: str, history_types: list[HistoryType]) -> tuple[list[str], str]:
+    emails_ids = []
+    page_count = 1
+    batch, next_page_token, latest_history_id = await gmail_client.get_history(start_history_id, history_types, 500, None)
+    emails_ids.extend([item["message"]["id"] for added in batch for item in added["messagesAdded"] ])
+    
+    await ws_manager.broadcast_progress(
+        job_id, 
+        JobState(
+            status="running", 
+            task_name="Sync latest emails", 
+            message=f"Fetching latest email ids (Page {page_count})."
+        )
+    )
+
+    while next_page_token is not None:
+        batch, next_page_token, _ = await gmail_client.get_email_ids(500, next_page_token)
+        emails_ids.extend([item["message"]["id"] for added in batch["history"] for item in added["messagesAdded"] ])
+        page_count += 1
+
+        await ws_manager.broadcast_progress(
+            job_id, 
+            JobState(
+                status="running", 
+                task_name="Sync latest emails", 
+                message=f"Fetching latest email ids (Page {page_count})."
+            )
+        )
+
+    return emails_ids, latest_history_id
 
 async def _get_emails(gmail_client: GmailClient, ws_manager: ConnectionManager, job_id: str, emails_ids: list[str]) -> list[dict]:
     await ws_manager.broadcast_progress(
@@ -64,7 +97,7 @@ async def _get_emails(gmail_client: GmailClient, ws_manager: ConnectionManager, 
             )
                 
             # todo: remove this
-            if count == 100:
+            if count == 50:
                 break
 
             result = await gmail_client.get_email(message_id)
@@ -118,12 +151,19 @@ async def _get_email_status(ws_manager: ConnectionManager, job_id: str, emails: 
     return emails
         
 
-async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
+async def sync_emails(ws_manager: ConnectionManager, job_id: str):
     # todo: add exception handler
     gmail_client = await GmailClient.create()
 
-    # Get all ids
-    emails_ids, latest_email_id = await _get_emails_ids(gmail_client, ws_manager, job_id)
+    start_history_id = await get_history_checkpoint()
+
+    if start_history_id is None: 
+    # Get all ids if no start_history_id
+        emails_ids, latest_history_id = await _get_emails_ids(gmail_client, ws_manager, job_id)
+    else:
+    # Get all ids from history
+        history_types: list[HistoryType] = ["messageAdded"] 
+        emails_ids, latest_history_id = await _get_history_ids(gmail_client, ws_manager, job_id, start_history_id, history_types)
     # Get all emails
     emails = await _get_emails(gmail_client, ws_manager, job_id, emails_ids)
     # Get email labels
@@ -141,10 +181,8 @@ async def sync_all_emails(ws_manager: ConnectionManager, job_id: str):
 
     # Get email statueses
     emails_with_status = await _get_email_status(ws_manager, job_id, job_emails)
+    
     # Save to db
     await add_emails(emails_with_status)
-    
-
-
-async def sync_latest_emails(ws_manager: ConnectionManager, job_id: str, history_id: str):
-    pass
+    # Save the latest history id
+    await update_history_checkpoint(latest_history_id)

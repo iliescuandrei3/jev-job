@@ -25,3 +25,10 @@ class Email(Document):
 
     class Settings:
         name = "emails"
+
+class HistoryCheckpoint(Document):
+    id: str = "gmail"
+    historyId: str
+
+    class Settings:
+        name = "history-checkpoint"

@@ -22,12 +22,9 @@ router = APIRouter(
 ws_manager = ConnectionManager()
 
 
-async def _run_refresh(job_id: str, latest_history_id: str | None) -> None:
+async def _run_refresh(job_id: str) -> None:
     try:
-        if latest_history_id is None:
-            await email_sync.sync_all_emails(ws_manager, job_id)
-        else:
-            await email_sync.sync_latest_emails(ws_manager, job_id, latest_history_id)
+        await email_sync.sync_emails(ws_manager, job_id)
 
         current_state = ws_manager.get_job_state(job_id)
         if current_state is None or current_state.status not in ("completed", "failed"):
@@ -64,8 +61,7 @@ async def refresh_emails(background_tasks: BackgroundTasks):
             },
         ) from error
 
-    latest_history_id = None  # TODO: fetch this from the database.
-    background_tasks.add_task(_run_refresh, job_id, latest_history_id)
+    background_tasks.add_task(_run_refresh, job_id)
 
     return {"job_id": job_id}
 

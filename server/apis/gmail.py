@@ -1,12 +1,14 @@
+import asyncio
 import os
 
-import asyncio
+from typing import Literal
+
 from aiolimiter import AsyncLimiter
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import Resource, build
+from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 _SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.labels"]
@@ -16,6 +18,7 @@ _QUOTA_LIMIT_PERIOD = 60 / (6000 / 20) + 0.15 # time_window / (total_quota_per_t
 _QUOTA_COSTS = {
     'messages.get': 20,
     'messages.list': 5,
+    'history.list': 2,
     'labels.list': 1,
 }
 
@@ -23,6 +26,13 @@ quota_limiter = AsyncLimiter(
     max_rate=_QUOTA_LIMIT,
     time_period=_QUOTA_LIMIT_PERIOD,
 )
+
+HistoryType = Literal[
+    "messageAdded",
+    "messageDeleted",
+    "labelAdded",
+    "labelRemoved",
+]
 
 def _is_rate_limit_error(exc):
     if not isinstance(exc, HttpError):
@@ -56,11 +66,11 @@ class GmailClient:
         return await asyncio.to_thread(cls)
 
     @retry(wait=wait_exponential(multiplier=1, min=2, max=60), stop=stop_after_attempt(5), retry=retry_if_exception(_is_rate_limit_error))
-    async def _list_messages(self, service: Resource, max_results: int, page_token: str | None):
+    async def _list_messages(self, max_results: int, page_token: str | None):
         await quota_limiter.acquire(amount=_QUOTA_COSTS['messages.list'])
         
         return await asyncio.to_thread(
-            service.users().messages().list(
+            self.service.users().messages().list(
                 userId="me",
                 maxResults=max_results,
                 pageToken=page_token,
@@ -69,11 +79,11 @@ class GmailClient:
         )
 
     @retry(wait=wait_exponential(multiplier=1, min=2, max=60), stop=stop_after_attempt(5), retry=retry_if_exception(_is_rate_limit_error))
-    async def _get_message(self, service: Resource, msg_id: str):
+    async def _get_message(self, msg_id: str):
         await quota_limiter.acquire(amount=_QUOTA_COSTS['messages.get'])
         
         return await asyncio.to_thread(
-            service.users().messages().get(
+            self.service.users().messages().get(
                 userId='me', 
                 id=msg_id, 
                 format='full'
@@ -81,11 +91,25 @@ class GmailClient:
         )
 
     @retry(wait=wait_exponential(multiplier=1, min=2, max=60), stop=stop_after_attempt(5), retry=retry_if_exception(_is_rate_limit_error))
-    async def _list_labels(self, service: Resource):
+    async def _list_labels(self):
         await quota_limiter.acquire(amount=_QUOTA_COSTS['labels.list'])
         
         return await asyncio.to_thread(
-            service.users().labels().list(userId='me').execute
+            self.service.users().labels().list(userId='me').execute
+        )
+    
+    @retry(wait=wait_exponential(multiplier=1, min=2, max=60), stop=stop_after_attempt(5), retry=retry_if_exception(_is_rate_limit_error))
+    async def _list_history(self, start_history_id: str, history_types: list[HistoryType], max_results: int = 500, page_token: str = None):
+        await quota_limiter.acquire(amount=_QUOTA_COSTS['history.list'])
+               
+        return await asyncio.to_thread(
+            self.service.users().history().list(
+                userId="me",
+                maxResults=max_results,
+                pageToken=page_token,
+                startHistoryId=start_history_id,
+                historyTypes=history_types,
+            ).execute
         )
 
 
@@ -112,15 +136,22 @@ class GmailClient:
         return creds
 
     async def get_email_ids(self, max_results: int = 500, page_token: str = None) -> tuple[list[dict[str, str]], str | None]:
-        results = await self._list_messages(self.service, max_results, page_token)
+        results = await self._list_messages(max_results, page_token)
         messages = results.get("messages", [])
         next_page_token = results.get("nextPageToken", None)
         return messages, next_page_token
 
     async def get_email(self, message_id: str) -> dict[str, dict]:
-        email =  await self._get_message(self.service, message_id)
+        email =  await self._get_message(message_id)
         return email
 
     async def get_labels(self) -> list[dict[str, object]]:
-        results = await self._list_labels(self.service)
+        results = await self._list_labels()
         return results.get("labels", [])
+
+    async def get_history(self, start_history_id: str, history_types: list[HistoryType], max_results: int = 500, page_token: str = None) -> tuple[list[dict[str, str]], str | None, str]:
+        results = await self._list_history(start_history_id, history_types, max_results, page_token)
+        history = results.get("history", [])
+        next_page_token = results.get("nextPageToken", None)
+        latest_history_id = results.get("historyId", "")
+        return history, next_page_token, latest_history_id
