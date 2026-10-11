@@ -1,10 +1,13 @@
 import json
 
+from googleapiclient.errors import HttpError
+
 from server.apis.gmail import GmailClient, HistoryType
 from server.apis.openrouter import openrouter
 from server.db.checkpoint import get_history_checkpoint, update_history_checkpoint
+from server.db.email_identifiers import add_email_identifiers, get_all_email_identifiers
 from server.db.emails import add_emails, get_emails
-from server.schemas.email import ParsedEmail
+from server.schemas.email import EmailIdentifierData, ParsedEmail
 from server.schemas.websocket import JobState
 from server.services.email_decision import decide_email_application
 from server.services.email_parser import parse_emails
@@ -61,8 +64,8 @@ async def _get_history_ids(gmail_client: GmailClient, ws_manager: ConnectionMana
     )
 
     while next_page_token is not None:
-        batch, next_page_token, _ = await gmail_client.get_email_ids(500, next_page_token)
-        emails_ids.extend([item["message"]["id"] for added in batch["history"] for item in added["messagesAdded"] ])
+        batch, next_page_token, _ = await gmail_client.get_history(start_history_id, history_types, 500, next_page_token)
+        emails_ids.extend([item["message"]["id"] for added in batch for item in added["messagesAdded"] ])
         page_count += 1
 
         await ws_manager.broadcast_progress(
@@ -158,12 +161,25 @@ async def sync_emails(ws_manager: ConnectionManager, job_id: str):
     start_history_id = await get_history_checkpoint()
 
     if start_history_id is None: 
-    # Get all ids if no start_history_id
+        # Get all ids if no start_history_id
         emails_ids, latest_history_id = await _get_emails_ids(gmail_client, ws_manager, job_id)
     else:
-    # Get all ids from history
-        history_types: list[HistoryType] = ["messageAdded"] 
-        emails_ids, latest_history_id = await _get_history_ids(gmail_client, ws_manager, job_id, start_history_id, history_types)
+        try:
+            # Get all ids from history
+            history_types: list[HistoryType] = ["messageAdded"] 
+            emails_ids, latest_history_id = await _get_history_ids(gmail_client, ws_manager, job_id, start_history_id, history_types)
+        except HttpError as exc:
+            # In case the latest history id expired (404), perform a full sync
+            # Only retry on 404 (history checkpoint expired / invalid)
+            if exc.resp.status != 404:
+                raise
+            emails_ids, latest_history_id = await _get_emails_ids(gmail_client, ws_manager, job_id)
+
+    # Check existing email ids
+    existing_identifiers = await get_all_email_identifiers()
+    existing_ids = set([email.emailId for email in existing_identifiers])
+    emails_ids = list(set(emails_ids) - existing_ids)
+    
     # Get all emails
     emails = await _get_emails(gmail_client, ws_manager, job_id, emails_ids)
     # Get email labels
@@ -171,9 +187,9 @@ async def sync_emails(ws_manager: ConnectionManager, job_id: str):
     # Parse eails
     parsed_emails = parse_emails(emails, labels)
     # Make decisions
-    emails_with_decisinos = await _make_decisions(ws_manager, job_id, parsed_emails)
+    emails_with_decisions = await _make_decisions(ws_manager, job_id, parsed_emails)
     # Filter non-job related emails
-    job_emails = [email for email in emails_with_decisinos if email.isJob >= _IS_JOB_THRESHOLD]
+    job_emails = [email for email in emails_with_decisions if email.isJob >= _IS_JOB_THRESHOLD]
 
     # mock for testing
     # emails = await get_emails()
@@ -184,5 +200,10 @@ async def sync_emails(ws_manager: ConnectionManager, job_id: str):
     
     # Save to db
     await add_emails(emails_with_status)
+    # Save all email ids (job/non-job) for later deduplication
+    await add_email_identifiers([
+        EmailIdentifierData(emailId=email.emailId, isJob=email.isJob)
+        for email in emails_with_decisions
+    ])
     # Save the latest history id
     await update_history_checkpoint(latest_history_id)

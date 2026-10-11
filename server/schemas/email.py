@@ -11,6 +11,12 @@ class ApplicationStatus(str, Enum):
     Accepted = "accepted"
     Rejected = "rejected"
  
+class EmailIdentifierData(BaseModel):
+    emailId: str
+    isJob: Optional[float] = None
+
+    model_config = ConfigDict(extra="forbid")
+
 class ParsedEmail(BaseModel):
     emailId: str
     threadId: str

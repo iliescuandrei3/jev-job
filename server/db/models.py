@@ -26,6 +26,13 @@ class Email(Document):
     class Settings:
         name = "emails"
 
+class EmailIdentifier(Document):
+    emailId: Annotated[str, Indexed()]
+    isJob: Optional[float] = None
+
+    class Settings:
+        name = "email-identifiers"
+
 class HistoryCheckpoint(Document):
     id: str = "gmail"
     historyId: str

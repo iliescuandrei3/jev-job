@@ -4,7 +4,7 @@ from beanie import init_beanie
 from dotenv import load_dotenv
 from pymongo import AsyncMongoClient
 
-from server.db.models import Email, HistoryCheckpoint
+from server.db.models import Email, EmailIdentifier, HistoryCheckpoint
 
 _client: AsyncMongoClient | None = None
 
@@ -24,7 +24,7 @@ async def init_db() -> None:
     try:
         await init_beanie(
             database=client["jev-job"],
-            document_models=[Email, HistoryCheckpoint],
+            document_models=[Email, HistoryCheckpoint, EmailIdentifier],
         )
     except Exception:
         await client.close()
