@@ -33,6 +33,15 @@ class EmailIdentifier(Document):
     class Settings:
         name = "email-identifiers"
 
+class FailedEmailIdentifier(Document):
+    emailId: Annotated[str, Indexed(unique=True)]
+    statusCode: int
+    reason: str
+    lastFailedAt: datetime
+
+    class Settings:
+        name = "failed-email-identifiers"
+
 class HistoryCheckpoint(Document):
     id: str = "gmail"
     historyId: str
