@@ -2,16 +2,12 @@ from fastapi import APIRouter
 
 
 router = APIRouter(
-    prefix="/applications",
-    tags=["Applications"],
+    prefix="/metrics",
+    tags=["Metrics"],
 )
 
-@router.get("/metrics")
+@router.get("/")
 async def get_metrics():
-    pass
-
-@router.get("/companies")
-async def get_companies():
     pass
 
 @router.get("/timeline")
