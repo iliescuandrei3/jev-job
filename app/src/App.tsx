@@ -11,6 +11,7 @@ type JobState = {
 
 const ACTIVE_JOB_STORAGE_KEY = 'email-refresh-job-id'
 const TERMINAL_STATUSES: JobStatus[] = ['completed', 'failed']
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')
 
 function isJobState(value: unknown): value is JobState {
   if (typeof value !== 'object' || value === null) return false
@@ -24,8 +25,12 @@ function isJobState(value: unknown): value is JobState {
 }
 
 function getWebSocketUrl(jobId: string) {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/emails/ws/sync/${encodeURIComponent(jobId)}`
+  const url = new URL(
+    `/emails/ws/sync/${encodeURIComponent(jobId)}`,
+    API_BASE_URL || window.location.origin,
+  )
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  return url.toString()
 }
 
 function App() {
@@ -124,7 +129,9 @@ function App() {
     setIsStarting(true)
     setRequestError(null)
     try {
-      const response = await fetch('/emails/refresh', { method: 'POST' })
+      const response = await fetch(`${API_BASE_URL}/emails/refresh`, {
+        method: 'POST',
+      })
       const body: unknown = await response.json()
 
       if (response.status === 409 && typeof body === 'object' && body !== null) {

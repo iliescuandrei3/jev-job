@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+!.env.example
+**/.venv
+**/__pycache__
+**/*.py[cod]
+app/node_modules
+app/dist
+app/.env
+app/.env.*
+server/.env
+server/.env.*
+server/credentials.json
+server/token.json
+server/data

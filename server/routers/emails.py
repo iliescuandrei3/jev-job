@@ -9,6 +9,7 @@ from fastapi import (
 )
 
 from server.schemas.websocket import JobState
+from server.settings import FRONTEND_ORIGINS
 from server.services import email_sync
 from server.websocket import ActiveJobInProgress, ConnectionManager
 
@@ -68,6 +69,11 @@ async def refresh_emails(background_tasks: BackgroundTasks):
 
 @router.websocket("/ws/sync/{job_id}")
 async def websocket_sync(websocket: WebSocket, job_id: str):
+    origin = websocket.headers.get("origin")
+    if origin and origin not in FRONTEND_ORIGINS:
+        await websocket.close(code=1008)
+        return
+
     try:
         await ws_manager.connect(websocket, job_id)
         while True:

@@ -1,0 +1,51 @@
+services:
+  backend:
+    image: jev-job-backend:dev
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    command:
+      - uv
+      - run
+      - --project
+      - /workspace/server
+      - uvicorn
+      - server.app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /workspace/server
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ./server:/workspace/server
+      - backend_python_packages:/workspace/server/.venv
+    ports:
+      - "8000:8000"
+
+  frontend:
+    image: jev-job-frontend:dev
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      target: development
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
+      VITE_USE_POLLING: "true"
+    volumes:
+      - ./app:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  backend_python_packages:
+  frontend_node_modules:
