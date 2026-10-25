@@ -3,13 +3,18 @@ import logging
 from fastapi import (
     APIRouter,
     BackgroundTasks,
+    Depends,
     HTTPException,
     WebSocket,
     WebSocketDisconnect,
 )
 
+from server.routers.auth import (
+    get_current_user,
+    require_websocket_user,
+    verify_csrf_and_origin,
+)
 from server.schemas.websocket import JobState
-from server.settings import FRONTEND_ORIGINS
 from server.services import email_sync
 from server.websocket import ActiveJobInProgress, ConnectionManager
 
@@ -49,7 +54,7 @@ async def _run_refresh(job_id: str) -> None:
         )
 
 
-@router.post("/refresh")
+@router.post("/refresh", dependencies=[Depends(verify_csrf_and_origin), Depends(get_current_user)])
 async def refresh_emails(background_tasks: BackgroundTasks):
     try:
         job_id = ws_manager.create_job("Sync emails")
@@ -67,13 +72,11 @@ async def refresh_emails(background_tasks: BackgroundTasks):
     return {"job_id": job_id}
 
 
-@router.websocket("/ws/sync/{job_id}")
+@router.websocket(
+    "/ws/sync/{job_id}",
+    dependencies=[Depends(require_websocket_user)],
+)
 async def websocket_sync(websocket: WebSocket, job_id: str):
-    origin = websocket.headers.get("origin")
-    if origin and origin not in FRONTEND_ORIGINS:
-        await websocket.close(code=1008)
-        return
-
     try:
         await ws_manager.connect(websocket, job_id)
         while True:
