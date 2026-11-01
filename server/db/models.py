@@ -17,7 +17,7 @@ class Email(Document):
     toName: str
     fromAddress: str
     fromName: str
-    content: list[str] = ""
+    content: list[str] = []
     isJob: Annotated[Optional[float], Indexed()] = None
     applicationStatus: ApplicationStatus = ApplicationStatus.Undefined
     company: Annotated[str, Indexed()] = ""

@@ -39,3 +39,11 @@ class ParsedEmail(BaseModel):
         extra="forbid", 
         use_enum_values=True
     )    
+
+class JobEmail(BaseModel):
+    emailId: str
+    date: datetime
+    applicationStatus: ApplicationStatus = ApplicationStatus.Undefined
+    company: str = ""
+    role: str = ""
+    fromAddress: str = ""
