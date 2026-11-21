@@ -1,20 +1,19 @@
 import { useState } from "react";
-import { Repeat } from "lucide-react";
 import { MOCK_EMAILS } from "@/lib/mock-data";
-import { buildApplications, byCompany, fromMockStatus } from "@/lib/analytics";
-import { fmtDate } from "@/lib/format";
 import { useDashboardFilters } from "@/hooks/use-dashboard-filters";
 import { useFilterOptions } from "@/hooks/use-filter-options";
 import { useApplications } from "@/hooks/use-applications";
+import { useCompanies, useCompany } from "@/hooks/use-companies";
 import { useOverview } from "@/hooks/use-overview";
 import { usePatterns } from "@/hooks/use-patterns";
 import { useTimeline } from "@/hooks/use-timeline";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { ApplicationsTable } from "@/components/dashboard/ApplicationsTable";
+import { CompanyGrid } from "@/components/dashboard/CompanyGrid";
+import { CompanyHistory, CompanyPicker } from "@/components/dashboard/CompanyHistory";
 import { InsightsStrip, StatTiles } from "@/components/dashboard/Overview";
 import { PanelState } from "@/components/dashboard/PanelState";
 import { SearchBar } from "@/components/dashboard/SearchBar";
-import { StatusDot, StatusPill } from "@/components/dashboard/StatusDot";
 import {
   Funnel,
   Heatmap,
@@ -28,8 +27,6 @@ import {
 } from "@/components/dashboard/Charts";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const ALL_APPS = buildApplications(MOCK_EMAILS);
-const ALL_COMPANIES = [...new Set(ALL_APPS.map((a) => a.company))].sort();
 const LANE_COUNT = 18;
 const TIMELINE_WEEKS = 26;
 
@@ -41,10 +38,11 @@ export default function App() {
   const patterns = usePatterns(queryFilters);
   const overview = useOverview(queryFilters);
   const timeline = useTimeline(queryFilters, TIMELINE_WEEKS);
-  const [focusCompany, setFocusCompany] = useState<string>(byCompany(ALL_APPS)[0]?.company ?? "");
-  // Widgets still read mock data and ignore the filters until their vertical task (04–09)
-  const apps = ALL_APPS;
-  const companies = byCompany(apps);
+  const companies = useCompanies(queryFilters);
+  // A company key. Until something is picked, focus follows the first company in /companies
+  const [pickedCompany, setFocusCompany] = useState<string | null>(null);
+  const focusCompany = pickedCompany ?? companies.data?.[0]?.key ?? null;
+  const company = useCompany(focusCompany);
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 md:px-8">
@@ -171,7 +169,19 @@ export default function App() {
             )}
           </PanelState>
         </Panel>
-        <CompanyDeepDive company={focusCompany} onChange={setFocusCompany} />
+        <Panel title="Company history" sub="Every process you've had with this company">
+          <CompanyPicker options={filterOptions.data?.companies ?? []} value={focusCompany} onChange={setFocusCompany} />
+          <PanelState
+            // A query without a key stays pending; until a key exists, wait for /companies to pick one
+            isLoading={focusCompany ? company.isPending : companies.isPending}
+            error={company.error}
+            isEmpty={!focusCompany}
+            emptyText="Pick a company to see its history."
+            onRetry={() => void company.refetch()}
+          >
+            {company.data && <CompanyHistory company={company.data} />}
+          </PanelState>
+        </Panel>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -199,27 +209,16 @@ export default function App() {
 
       <Panel
         title="Companies"
-        sub={`${companies.length} companies · click one to open its history`}
+        sub={companies.data ? `${companies.data.length} companies · click one to open its history` : "Click one to open its history"}
       >
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {companies.slice(0, 24).map(({ company, list }) => (
-            <button
-              key={company}
-              onClick={() => setFocusCompany(company)}
-              className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors hover:border-primary ${focusCompany === company ? "border-primary bg-accent" : ""}`}
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-secondary font-mono text-xs">
-                {company.slice(0, 2)}
-              </span>
-              <span className="flex-1 truncate text-sm">{company}</span>
-              <span className="flex gap-1">
-                {list.map((a) => (
-                  <StatusDot key={a.threadId} status={fromMockStatus(a.status)} />
-                ))}
-              </span>
-            </button>
-          ))}
-        </div>
+        <PanelState
+          isLoading={companies.isPending}
+          error={companies.error}
+          isEmpty={companies.data?.length === 0}
+          onRetry={() => void companies.refetch()}
+        >
+          {companies.data && <CompanyGrid companies={companies.data} selected={focusCompany} onSelect={setFocusCompany} />}
+        </PanelState>
       </Panel>
 
       <Panel
@@ -240,73 +239,5 @@ export default function App() {
         mock data · wire up your Mongo API in src/lib/mock-data.ts
       </footer>
     </main>
-  );
-}
-
-function CompanyDeepDive({
-  company,
-  onChange,
-}: {
-  company: string;
-  onChange: (c: string) => void;
-}) {
-  const list = ALL_APPS.filter((a) => a.company === company).sort(
-    (a, b) => b.appliedAt.getTime() - a.appliedAt.getTime(),
-  );
-  return (
-    <Panel title="Company history" sub="Every process you've had with this company">
-      <select
-        value={company}
-        onChange={(e) => onChange(e.target.value)}
-        className="mb-4 w-full rounded-lg border bg-secondary px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-      >
-        {ALL_COMPANIES.map((c) => (
-          <option key={c}>{c}</option>
-        ))}
-      </select>
-      <div className="mb-4 flex gap-6 text-sm">
-        <div>
-          <div className="text-2xl font-bold">{list.length}</div>
-          <div className="eyebrow">processes</div>
-        </div>
-        <div>
-          <div className="text-2xl font-bold">{list.reduce((n, a) => n + a.emails.length, 0)}</div>
-          <div className="eyebrow">emails</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Repeat className="h-4 w-4 text-primary" />
-          <span className="text-xs text-muted-foreground">
-            {list.length > 1 ? "Repeat applicant" : "First contact"}
-          </span>
-        </div>
-      </div>
-      <div className="max-h-[340px] space-y-5 overflow-auto pr-2">
-        {list.map((a) => (
-          <div key={a.threadId}>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium">{a.role}</span>
-              <StatusPill status={fromMockStatus(a.status)} />
-            </div>
-            <ol className="relative ml-1 space-y-3 border-l pl-4">
-              {a.emails.map((e) => (
-                <li key={e.emailId} className="relative">
-                  <StatusDot
-                    status={fromMockStatus(e.applicationStatus)}
-                    className="absolute -left-[21px] top-1.5 ring-4 ring-card"
-                  />
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-xs font-medium">{e.subject}</span>
-                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                      {fmtDate(e.date)}
-                    </span>
-                  </div>
-                  <p className="truncate text-xs text-muted-foreground">{e.snippet}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-        ))}
-      </div>
-    </Panel>
   );
 }

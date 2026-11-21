@@ -215,7 +215,7 @@ export function ProcessLanes({
 }: {
   items: ApplicationSummary[];
   range: DateRange;
-  onPick: (company: string) => void;
+  onPick: (companyKey: string) => void;
 }) {
   const start = new Date(range.start).getTime();
   const span = new Date(range.end).getTime() - start || 1;
@@ -226,7 +226,7 @@ export function ProcessLanes({
         const left = pos(a.appliedAt);
         const width = Math.max(1.2, pos(a.lastAt) - left);
         return (
-          <button key={a.id} onClick={() => onPick(a.company)} className="group grid w-full grid-cols-[150px_1fr] items-center gap-3 text-left">
+          <button key={a.id} onClick={() => onPick(a.companyKey)} className="group grid w-full grid-cols-[150px_1fr] items-center gap-3 text-left">
             <span className="truncate text-xs">
               <span className="font-medium group-hover:text-primary">{a.company}</span>
               <span className="text-muted-foreground"> · {a.role ? a.role.split(" ")[0] : UNKNOWN_ROLE_LABEL}</span>

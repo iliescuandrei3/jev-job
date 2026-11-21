@@ -8,7 +8,7 @@ export function ApplicationsTable({
   onPick,
 }: {
   items: ApplicationSummary[];
-  onPick: (company: string) => void;
+  onPick: (companyKey: string) => void;
 }) {
   return (
     <div className="max-h-[420px] overflow-auto">
@@ -27,7 +27,7 @@ export function ApplicationsTable({
           {items.map((a) => (
             <tr
               key={a.id}
-              onClick={() => onPick(a.company)}
+              onClick={() => onPick(a.companyKey)}
               className="cursor-pointer border-t hover:bg-accent/50"
             >
               <td className="py-2 font-medium">{a.company}</td>

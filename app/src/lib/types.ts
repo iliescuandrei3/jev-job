@@ -243,6 +243,27 @@ export interface TimelineOut {
   heatmap: HeatmapData;
 }
 
+/** server/schemas/company.py · CompanyOut (GET /companies) */
+export interface CompanyOut {
+  key: string;
+  name: string;
+  applications: number;
+  /** One per application, newest first */
+  statuses: Status[];
+}
+
+/** server/schemas/company.py · CompanyDetailOut (GET /companies/{companyKey}). Unfiltered. */
+export interface CompanyDetailOut {
+  key: string;
+  name: string;
+  applicationCount: number;
+  emailCount: number;
+  /** More than one application */
+  repeat: boolean;
+  /** Newest first; emails inside each oldest first */
+  applications: ApplicationOut[];
+}
+
 /** server/routers/auth.py · the session user stored at /auth/callback */
 export interface AuthUser {
   sub: string;

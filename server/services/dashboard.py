@@ -1,4 +1,3 @@
-from collections import Counter, defaultdict
 from collections.abc import Callable, Sequence
 from datetime import datetime
 
@@ -14,10 +13,12 @@ from server.schemas.application import (
     GroupingResult,
     Status,
 )
+from server.schemas.company import CompanyDetailOut
 from server.schemas.dashboard import CompanyOption, DashboardFilters, FilterOptionsOut
 from server.services.applications import group_into_applications
 from server.services.email_templates import email_text
 from server.services.filters import apply_filters
+from server.services.metrics import company_names
 
 _STATUS_ORDER = [
     Status.Applied,
@@ -36,11 +37,7 @@ async def load_applications(filters: DashboardFilters, now: datetime) -> Groupin
     return GroupingResult(applications=apply_filters(result.applications, filters, now), unassigned=result.unassigned)
 
 def get_filter_options(apps: Sequence[Application]) -> FilterOptionsOut:
-    names: dict[str, list[str]] = defaultdict(list)
-    for app in apps:
-        names[app.companyKey].append(app.company)
-    # One display name per key: the most common one
-    companies = [CompanyOption(key=key, name=Counter(values).most_common(1)[0][0]) for key, values in names.items()]
+    companies = [CompanyOption(key=key, name=name) for key, name in company_names(apps).items()]
     companies.sort(key=lambda option: option.name.lower())
 
     roles = sorted({app.role for app in apps if app.role}, key=str.lower)
@@ -118,3 +115,18 @@ def get_application(apps: Sequence[Application], application_id: str) -> Applica
         if app.id == application_id:
             return to_application_out(app)
     return None
+
+def get_company(apps: Sequence[Application], company_key: str) -> CompanyDetailOut | None:
+    """Every application at one company, newest first. Pass unfiltered applications for the whole history."""
+    group = [app for app in apps if app.companyKey == company_key]
+    if not group:
+        return None
+    ordered = sorted(sorted(group, key=lambda app: app.id), key=lambda app: app.appliedAt, reverse=True)
+    return CompanyDetailOut(
+        key=company_key,
+        name=company_names(group)[company_key],
+        applicationCount=len(group),
+        emailCount=sum(len(app.emails) for app in group),
+        repeat=len(group) > 1,
+        applications=[to_application_out(app) for app in ordered],
+    )

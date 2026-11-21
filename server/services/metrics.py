@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from statistics import median
 
 from server.schemas.application import Application, Status
+from server.schemas.company import CompanyOut
 from server.schemas.dashboard import (
     BestRoleOut,
     BusiestDayOut,
@@ -231,3 +232,30 @@ def heatmap(apps: Sequence[Application], now: datetime, weeks: int) -> HeatmapOu
         for day in (start + timedelta(days=offset) for offset in range((end - start).days + 1))
     ]
     return HeatmapOut(start=start, end=end, max=max((day.count for day in days), default=0), days=days)
+
+# --- Companies (GET /companies) ---
+
+def company_names(apps: Sequence[Application]) -> dict[str, str]:
+    """One display name per company key: the most common one among its applications."""
+    names: dict[str, list[str]] = defaultdict(list)
+    for app in apps:
+        names[app.companyKey].append(app.company)
+    return {key: Counter(values).most_common(1)[0][0] for key, values in names.items()}
+
+def companies(apps: Sequence[Application]) -> list[CompanyOut]:
+    """Companies by number of applications, most first; ties by name. Statuses are newest application first."""
+    by_key: dict[str, list[Application]] = defaultdict(list)
+    for app in apps:
+        by_key[app.companyKey].append(app)
+    names = company_names(apps)
+    result = [
+        CompanyOut(
+            key=key,
+            name=names[key],
+            applications=len(group),
+            statuses=[app.status for app in sorted(group, key=lambda app: app.appliedAt, reverse=True)],
+        )
+        for key, group in by_key.items()
+    ]
+    result.sort(key=lambda company: (-company.applications, company.name.lower(), company.key))
+    return result
