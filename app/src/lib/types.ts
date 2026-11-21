@@ -215,6 +215,34 @@ export interface OverviewOut {
   insights: Insights;
 }
 
+/** server/schemas/dashboard.py · WeekCountsOut */
+export interface WeekCounts {
+  weekStart: string; // YYYY-MM-DD, a Monday (UTC)
+  /** Applications applied that week, by current status. Statuses with no application are left out */
+  counts: Partial<Record<Status, number>>;
+}
+
+/** server/schemas/dashboard.py · HeatmapDayOut */
+export interface HeatmapDay {
+  date: string; // YYYY-MM-DD (UTC)
+  count: number;
+}
+
+/** server/schemas/dashboard.py · HeatmapOut */
+export interface HeatmapData {
+  start: string; // a Monday
+  end: string; // today (UTC); no days after it
+  /** The busiest day's count; 0 without applications */
+  max: number;
+  days: HeatmapDay[];
+}
+
+/** server/schemas/dashboard.py · TimelineOut (GET /dashboard/timeline) */
+export interface TimelineOut {
+  weekly: WeekCounts[];
+  heatmap: HeatmapData;
+}
+
 /** server/routers/auth.py · the session user stored at /auth/callback */
 export interface AuthUser {
   sub: string;

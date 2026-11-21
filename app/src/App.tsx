@@ -8,6 +8,7 @@ import { useFilterOptions } from "@/hooks/use-filter-options";
 import { useApplications } from "@/hooks/use-applications";
 import { useOverview } from "@/hooks/use-overview";
 import { usePatterns } from "@/hooks/use-patterns";
+import { useTimeline } from "@/hooks/use-timeline";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { ApplicationsTable } from "@/components/dashboard/ApplicationsTable";
 import { InsightsStrip, StatTiles } from "@/components/dashboard/Overview";
@@ -30,6 +31,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 const ALL_APPS = buildApplications(MOCK_EMAILS);
 const ALL_COMPANIES = [...new Set(ALL_APPS.map((a) => a.company))].sort();
 const LANE_COUNT = 18;
+const TIMELINE_WEEKS = 26;
 
 export default function App() {
   const { filters, setFilters, queryFilters } = useDashboardFilters();
@@ -38,6 +40,7 @@ export default function App() {
   const lanes = useApplications(queryFilters, { sort: "recent", limit: LANE_COUNT });
   const patterns = usePatterns(queryFilters);
   const overview = useOverview(queryFilters);
+  const timeline = useTimeline(queryFilters, TIMELINE_WEEKS);
   const [focusCompany, setFocusCompany] = useState<string>(byCompany(ALL_APPS)[0]?.company ?? "");
   // Widgets still read mock data and ignore the filters until their vertical task (04–09)
   const apps = ALL_APPS;
@@ -84,7 +87,15 @@ export default function App() {
           sub="Weekly, coloured by where each process ended up"
           className="lg:col-span-2"
         >
-          <WeeklyChart apps={apps} />
+          <PanelState
+            isLoading={timeline.isPending}
+            error={timeline.error}
+            isEmpty={timeline.data?.heatmap.max === 0}
+            onRetry={() => void timeline.refetch()}
+            skeleton={<Skeleton className="h-[240px] w-full" />}
+          >
+            {timeline.data && <WeeklyChart weeks={timeline.data.weekly} />}
+          </PanelState>
         </Panel>
         <Panel title="Conversion funnel" sub="Stage-to-stage drop-off">
           <PanelState
@@ -101,10 +112,17 @@ export default function App() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel
           title="Application streak map"
-          sub="Daily applications, last 26 weeks"
+          sub={`Daily applications, last ${TIMELINE_WEEKS} weeks`}
           className="lg:col-span-2"
         >
-          <Heatmap apps={apps} />
+          <PanelState
+            isLoading={timeline.isPending}
+            error={timeline.error}
+            isEmpty={timeline.data?.heatmap.max === 0}
+            onRetry={() => void timeline.refetch()}
+          >
+            {timeline.data && <Heatmap data={timeline.data.heatmap} />}
+          </PanelState>
         </Panel>
         <Panel title="Where things stand" sub="Current status of every process">
           <PanelState

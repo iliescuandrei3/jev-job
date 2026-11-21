@@ -7,6 +7,12 @@ export const fmtDays = (d: number) => (d < 1 ? `${Math.max(1, Math.round(d * 24)
 export const fmtDate = (d: Date | string) =>
   new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit", timeZone: "UTC" });
 
+/** `2026-05-04` → `4/5`, for week axis labels. UTC. */
+export const fmtWeek = (d: Date | string) => {
+  const date = new Date(d);
+  return `${date.getUTCDate()}/${date.getUTCMonth() + 1}`;
+};
+
 /** A 0–1 ratio as a whole percentage: `0.54` → `54%`. */
 export const pct = (x: number) => `${Math.round(x * 100)}%`;
 

@@ -106,8 +106,38 @@ def test_overview_is_filtered(client: TestClient) -> None:
     assert body["kpis"]["applications"] == 0
     assert body["insights"]["longestProcess"] is None
 
+def test_timeline(client: TestClient) -> None:
+    response = client.get("/dashboard/timeline", params={"weeks": 4})
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {"weekly", "heatmap"}
+    assert len(body["weekly"]) == 4
+    # MONDAY is last week's Monday
+    assert body["weekly"][-2] == {
+        "weekStart": MONDAY.date().isoformat(),
+        "counts": {"applied": 1, "interview": 1, "rejected": 1},
+    }
+    assert body["weekly"][-1]["counts"] == {}
+    heatmap = body["heatmap"]
+    assert heatmap["end"] == NOW.date().isoformat()
+    assert heatmap["days"][-1]["date"] == heatmap["end"]
+    assert heatmap["max"] == 2  # Spotify on Monday; N26 and Klarna on Tuesday
+    assert sum(day["count"] for day in heatmap["days"]) == 3
+
+def test_timeline_is_filtered(client: TestClient) -> None:
+    body = client.get("/dashboard/timeline", params={"companies": ["n26"]}).json()
+    assert len(body["weekly"]) == 26
+    assert sum(sum(week["counts"].values()) for week in body["weekly"]) == 1
+    assert body["heatmap"]["max"] == 1
+
+def test_timeline_weeks_bounds(client: TestClient) -> None:
+    assert client.get("/dashboard/timeline", params={"weeks": 3}).status_code == 422
+    assert client.get("/dashboard/timeline", params={"weeks": 105}).status_code == 422
+    assert client.get("/dashboard/timeline", params={"weeks": 104}).status_code == 200
+
 def test_requires_login() -> None:
     client = TestClient(_app())
     assert client.get("/dashboard/filters").status_code == 401
     assert client.get("/dashboard/patterns").status_code == 401
     assert client.get("/dashboard/overview").status_code == 401
+    assert client.get("/dashboard/timeline").status_code == 401

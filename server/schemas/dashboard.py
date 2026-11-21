@@ -138,3 +138,32 @@ class OverviewOut(BaseModel):
     insights: InsightsOut
 
     model_config = ConfigDict(extra="forbid")
+
+# --- Timeline (GET /dashboard/timeline) ---
+
+class WeekCountsOut(BaseModel):
+    weekStart: date  # a Monday (UTC)
+    # Applications applied that week, by current status. Statuses with no application are left out
+    counts: dict[Status, int]
+
+    model_config = ConfigDict(extra="forbid")
+
+class HeatmapDayOut(BaseModel):
+    date: date  # UTC day of appliedAt
+    count: int
+
+    model_config = ConfigDict(extra="forbid")
+
+class HeatmapOut(BaseModel):
+    start: date  # a Monday
+    end: date  # today (UTC); no days after it
+    max: int  # the busiest day's count; 0 without applications
+    days: list[HeatmapDayOut]  # every day from start to end
+
+    model_config = ConfigDict(extra="forbid")
+
+class TimelineOut(BaseModel):
+    weekly: list[WeekCountsOut]
+    heatmap: HeatmapOut
+
+    model_config = ConfigDict(extra="forbid")

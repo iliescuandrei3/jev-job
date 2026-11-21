@@ -4,7 +4,18 @@ import pytest
 
 from server.schemas.application import Application, ApplicationEmail, Status
 from server.schemas.email import ApplicationStatus
-from server.services.metrics import TOP_ROLES, funnel, hours, insights, kpis, roles, status_breakdown, weekdays
+from server.services.metrics import (
+    TOP_ROLES,
+    funnel,
+    heatmap,
+    hours,
+    insights,
+    kpis,
+    roles,
+    status_breakdown,
+    weekdays,
+    weekly,
+)
 
 # A Monday
 MONDAY = datetime(2026, 11, 2, tzinfo=timezone.utc)
@@ -283,3 +294,80 @@ def test_overview_empty_input() -> None:
     assert result.bestStreakDays == 0
     assert result.busiestDay is None
     assert result.bestRole is None
+
+
+# --- timeline ---
+
+# A Wednesday afternoon; its week starts on Monday 2026-11-16
+TIMELINE_NOW = datetime(2026, 11, 18, 15, tzinfo=timezone.utc)
+THIS_MONDAY = date(2026, 11, 16)
+
+
+def _applied(app_id: str, applied_at: datetime, status: Status = Status.Applied) -> Application:
+    return _process(app_id, f"company{app_id}", "Backend Engineer", status, applied_at, 0)
+
+def test_weekly_has_every_week_ending_with_the_current_one() -> None:
+    result = weekly([], TIMELINE_NOW, 4)
+    assert [w.weekStart for w in result] == [THIS_MONDAY - timedelta(weeks=n) for n in (3, 2, 1, 0)]
+    assert all(w.weekStart.weekday() == 0 for w in result)
+    assert all(w.counts == {} for w in result)
+
+def test_weekly_week_boundary_sunday_vs_monday() -> None:
+    sunday_late = datetime(2026, 11, 15, 23, 59, 59, tzinfo=timezone.utc)
+    monday_midnight = datetime(2026, 11, 16, 0, 0, tzinfo=timezone.utc)
+    result = weekly([_applied("a", sunday_late), _applied("b", monday_midnight)], TIMELINE_NOW, 4)
+    assert result[-2].weekStart == date(2026, 11, 9)
+    assert result[-2].counts == {Status.Applied: 1}
+    assert result[-1].counts == {Status.Applied: 1}
+
+def test_weekly_counts_by_current_status_and_keeps_empty_weeks() -> None:
+    apps = [
+        _applied("a", datetime(2026, 10, 27, 9, tzinfo=timezone.utc), Status.Rejected),
+        _applied("b", datetime(2026, 10, 29, 9, tzinfo=timezone.utc), Status.Rejected),
+        _applied("c", datetime(2026, 11, 1, 9, tzinfo=timezone.utc), Status.Ghosted),
+        _applied("d", datetime(2026, 11, 17, 9, tzinfo=timezone.utc), Status.Interview),
+    ]
+    result = weekly(apps, TIMELINE_NOW, 4)
+    assert [w.counts for w in result] == [
+        {Status.Rejected: 2, Status.Ghosted: 1},
+        {},
+        {},
+        {Status.Interview: 1},
+    ]
+
+def test_weekly_ignores_applications_outside_the_range() -> None:
+    too_early = datetime(2026, 10, 25, 23, 59, tzinfo=timezone.utc)  # Sunday before the first week
+    future = datetime(2026, 11, 23, 9, tzinfo=timezone.utc)  # next week
+    result = weekly([_applied("a", too_early), _applied("b", future)], TIMELINE_NOW, 4)
+    assert all(w.counts == {} for w in result)
+
+def test_heatmap_starts_on_a_monday_and_ends_today() -> None:
+    result = heatmap([], TIMELINE_NOW, 4)
+    assert result.start == THIS_MONDAY - timedelta(weeks=3)
+    assert result.start.weekday() == 0
+    assert result.end == TIMELINE_NOW.date()
+    # Three full weeks, then Monday to Wednesday of this week; no days after today
+    assert len(result.days) == 3 * 7 + 3
+    assert result.days[0].date == result.start
+    assert result.days[-1].date == result.end
+    assert result.max == 0
+
+def test_heatmap_counts_per_utc_day_and_max() -> None:
+    apps = [
+        _applied("a", datetime(2026, 11, 2, 0, 0, tzinfo=timezone.utc)),
+        _applied("b", datetime(2026, 11, 2, 23, 59, tzinfo=timezone.utc)),
+        _applied("c", datetime(2026, 11, 3, 9, tzinfo=timezone.utc)),
+        _applied("d", datetime(2026, 10, 1, 9, tzinfo=timezone.utc)),  # before the range
+    ]
+    result = heatmap(apps, TIMELINE_NOW, 4)
+    counts = {d.date: d.count for d in result.days}
+    assert counts[date(2026, 11, 2)] == 2
+    assert counts[date(2026, 11, 3)] == 1
+    assert sum(counts.values()) == 3
+    assert result.max == 2
+
+def test_heatmap_on_a_monday_has_one_day_in_the_last_week() -> None:
+    monday = datetime(2026, 11, 16, 8, tzinfo=timezone.utc)
+    result = heatmap([], monday, 4)
+    assert len(result.days) == 3 * 7 + 1
+    assert result.days[-1].date == monday.date()

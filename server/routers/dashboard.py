@@ -1,11 +1,11 @@
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from server.routers.auth import get_current_user
 from server.routers.dependencies import get_dashboard_filters
-from server.schemas.dashboard import DashboardFilters, FilterOptionsOut, OverviewOut, PatternsOut
+from server.schemas.dashboard import DashboardFilters, FilterOptionsOut, OverviewOut, PatternsOut, TimelineOut
 from server.services import metrics
 from server.services.dashboard import get_filter_options, load_applications
 
@@ -36,3 +36,12 @@ async def get_overview(filters: Annotated[DashboardFilters, Depends(get_dashboar
 async def get_patterns(filters: Annotated[DashboardFilters, Depends(get_dashboard_filters)]) -> PatternsOut:
     apps = (await load_applications(filters, datetime.now(timezone.utc))).applications
     return PatternsOut(roles=metrics.roles(apps), weekdays=metrics.weekdays(apps), hours=metrics.hours(apps))
+
+@router.get("/timeline", response_model=TimelineOut)
+async def get_timeline(
+    filters: Annotated[DashboardFilters, Depends(get_dashboard_filters)],
+    weeks: Annotated[int, Query(ge=4, le=104)] = 26,
+) -> TimelineOut:
+    now = datetime.now(timezone.utc)
+    apps = (await load_applications(filters, now)).applications
+    return TimelineOut(weekly=metrics.weekly(apps, now, weeks), heatmap=metrics.heatmap(apps, now, weeks))

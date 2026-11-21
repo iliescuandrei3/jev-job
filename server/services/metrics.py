@@ -10,6 +10,8 @@ from server.schemas.dashboard import (
     FastestRejectionOut,
     FunnelStage,
     FunnelStageOut,
+    HeatmapDayOut,
+    HeatmapOut,
     HourStatOut,
     InsightsOut,
     KpisOut,
@@ -17,6 +19,7 @@ from server.schemas.dashboard import (
     RoleStatOut,
     StatusShareOut,
     Weekday,
+    WeekCountsOut,
     WeekdayStatOut,
 )
 from server.schemas.email import ApplicationStatus
@@ -191,3 +194,40 @@ def insights(apps: Sequence[Application]) -> InsightsOut:
         busiestDay=BusiestDayOut(date=busiest[0], count=busiest[1]) if busiest else None,
         bestRole=_best_role(apps),
     )
+
+# --- Timeline (GET /dashboard/timeline) ---
+
+def _monday(day: date) -> date:
+    return day - timedelta(days=day.weekday())
+
+def _first_monday(now: datetime, weeks: int) -> date:
+    """The Monday that starts a range of `weeks` weeks ending with the current one (UTC)."""
+    return _monday(now.date()) - timedelta(weeks=weeks - 1)
+
+def weekly(apps: Sequence[Application], now: datetime, weeks: int) -> list[WeekCountsOut]:
+    """`weeks` Monday-to-Sunday weeks (UTC), the last one being the current week; empty weeks included.
+    Each application counts in the week of its `appliedAt`, under its current status."""
+    first = _first_monday(now, weeks)
+    counts: list[Counter[Status]] = [Counter() for _ in range(weeks)]
+    for app in apps:
+        index = (app.appliedAt.date() - first).days // 7
+        if 0 <= index < weeks:
+            counts[index][app.status] += 1
+    return [
+        WeekCountsOut(
+            weekStart=first + timedelta(weeks=index),
+            counts={status: week[status] for status in _BREAKDOWN_ORDER if week[status]},
+        )
+        for index, week in enumerate(counts)
+    ]
+
+def heatmap(apps: Sequence[Application], now: datetime, weeks: int) -> HeatmapOut:
+    """Applications per UTC day, from the Monday `weeks - 1` weeks back through today."""
+    start = _first_monday(now, weeks)
+    end = now.date()
+    per_day = Counter(app.appliedAt.date() for app in apps)
+    days = [
+        HeatmapDayOut(date=day, count=per_day[day])
+        for day in (start + timedelta(days=offset) for offset in range((end - start).days + 1))
+    ]
+    return HeatmapOut(start=start, end=end, max=max((day.count for day in days), default=0), days=days)

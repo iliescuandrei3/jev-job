@@ -2,13 +2,13 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  STATUSES, fromMockStatus, heatmap, weekly,
-  type Application,
-} from "@/lib/analytics";
-import { UNKNOWN_ROLE_LABEL, fmtDate, fmtWeekday, pct, roleLabel } from "@/lib/format";
-import { statusColor, statusLabel } from "@/lib/status";
+  Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider, TooltipTrigger as UiTooltipTrigger,
+} from "@/components/ui/tooltip";
+import { UNKNOWN_ROLE_LABEL, fmtDate, fmtWeek, fmtWeekday, pct, roleLabel } from "@/lib/format";
+import { STATUS_META, statusColor, statusLabel } from "@/lib/status";
 import type {
-  ApplicationSummary, DateRange, FunnelStage, FunnelStageName, HourStat, RoleStat, StatusShare, WeekdayStat,
+  ApplicationSummary, DateRange, FunnelStage, FunnelStageName, HeatmapData, HourStat, RoleStat, Status, StatusShare,
+  WeekCounts, WeekdayStat,
 } from "@/lib/types";
 import { StatusDot } from "./StatusDot";
 
@@ -63,8 +63,16 @@ export function Funnel({ stages }: { stages: FunnelStage[] }) {
   );
 }
 
-export function WeeklyChart({ apps }: { apps: Application[] }) {
-  const data = weekly(apps);
+const STATUS_ORDER = Object.keys(STATUS_META) as Status[];
+
+export function WeeklyChart({ weeks }: { weeks: WeekCounts[] }) {
+  // Recharts wants one flat row per week; a status missing from `counts` is 0 that week
+  const data = weeks.map((w) => ({
+    week: fmtWeek(w.weekStart),
+    ...Object.fromEntries(STATUS_ORDER.map((s) => [s, w.counts[s] ?? 0])),
+  }));
+  // Only draw the statuses that occur, so the tooltip doesn't list empty series
+  const series = STATUS_ORDER.filter((s) => weeks.some((w) => w.counts[s]));
   return (
     <ResponsiveContainer width="100%" height={240}>
       <AreaChart data={data} margin={{ left: -20, right: 4 }}>
@@ -72,8 +80,8 @@ export function WeeklyChart({ apps }: { apps: Application[] }) {
         <XAxis dataKey="week" {...axis} interval={3} />
         <YAxis {...axis} allowDecimals={false} />
         <Tooltip {...tooltip} />
-        {STATUSES.map((s) => (
-          <Area key={s} type="monotone" dataKey={s} stackId="1" stroke={statusColor(fromMockStatus(s))} fill={statusColor(fromMockStatus(s))} fillOpacity={0.35} />
+        {series.map((s) => (
+          <Area key={s} type="monotone" dataKey={s} name={statusLabel(s)} stackId="1" stroke={statusColor(s)} fill={statusColor(s)} fillOpacity={0.35} />
         ))}
       </AreaChart>
     </ResponsiveContainer>
@@ -112,31 +120,38 @@ export function StatusDonut({ data, total }: { data: StatusShare[]; total: numbe
   );
 }
 
-export function Heatmap({ apps }: { apps: Application[] }) {
-  const cols = heatmap(apps);
-  const max = Math.max(1, ...cols.flat().map((c) => c.count));
+export function Heatmap({ data }: { data: HeatmapData }) {
+  // `days` starts on a Monday, so every 7 days make one column (Mon at the top). The last column stops at today
+  const cols: HeatmapData["days"][] = [];
+  for (let i = 0; i < data.days.length; i += 7) cols.push(data.days.slice(i, i + 7));
+  const max = data.max || 1;
   return (
     <div className="overflow-x-auto">
-      <div className="flex gap-[3px]">
-        {cols.map((col, i) => (
-          <div key={i} className="flex flex-col gap-[3px]">
-            {col.map((c) => (
-              <div
-                key={c.date}
-                title={c.count >= 0 ? `${c.date}: ${c.count} applications` : ""}
-                className="h-3.5 w-3.5 rounded-[3px] bg-secondary"
-                style={
-                  c.count > 0
-                    ? { background: `color-mix(in oklab, var(--primary) ${25 + (c.count / max) * 75}%, var(--secondary))` }
-                    : c.count < 0
-                      ? { opacity: 0 }
-                      : undefined
-                }
-              />
-            ))}
-          </div>
-        ))}
-      </div>
+      <TooltipProvider delayDuration={200}>
+        <div className="flex gap-[3px]">
+          {cols.map((col) => (
+            <div key={col[0]!.date} className="flex flex-col gap-[3px]">
+              {col.map((c) => (
+                <UiTooltip key={c.date}>
+                  <UiTooltipTrigger asChild>
+                    <div
+                      className="h-3.5 w-3.5 rounded-[3px] bg-secondary"
+                      style={
+                        c.count > 0
+                          ? { background: `color-mix(in oklab, var(--primary) ${25 + (c.count / max) * 75}%, var(--secondary))` }
+                          : undefined
+                      }
+                    />
+                  </UiTooltipTrigger>
+                  <UiTooltipContent>
+                    {fmtDate(c.date)}: {c.count} {c.count === 1 ? "application" : "applications"}
+                  </UiTooltipContent>
+                </UiTooltip>
+              ))}
+            </div>
+          ))}
+        </div>
+      </TooltipProvider>
       <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
         less
         {[0, 0.33, 0.66, 1].map((p) => (
