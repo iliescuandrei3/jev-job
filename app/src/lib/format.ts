@@ -9,3 +9,10 @@ export const fmtDate = (d: Date | string) =>
 
 /** A 0–1 ratio as a whole percentage: `0.54` → `54%`. */
 export const pct = (x: number) => `${Math.round(x * 100)}%`;
+
+/** The API sends `""` for applications without a role. */
+export const UNKNOWN_ROLE_LABEL = "Unknown role";
+export const roleLabel = (role: string) => role || UNKNOWN_ROLE_LABEL;
+
+/** `mon` → `Mon`. */
+export const fmtWeekday = (day: string) => day.charAt(0).toUpperCase() + day.slice(1);

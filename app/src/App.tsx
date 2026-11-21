@@ -18,6 +18,7 @@ import { fmtDate, fmtDays, pct } from "@/lib/format";
 import { useDashboardFilters } from "@/hooks/use-dashboard-filters";
 import { useFilterOptions } from "@/hooks/use-filter-options";
 import { useApplications } from "@/hooks/use-applications";
+import { usePatterns } from "@/hooks/use-patterns";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { ApplicationsTable } from "@/components/dashboard/ApplicationsTable";
 import { PanelState } from "@/components/dashboard/PanelState";
@@ -44,6 +45,7 @@ export default function App() {
   const filterOptions = useFilterOptions();
   const applications = useApplications(queryFilters, { sort: "recent" });
   const lanes = useApplications(queryFilters, { sort: "recent", limit: LANE_COUNT });
+  const patterns = usePatterns(queryFilters);
   const [focusCompany, setFocusCompany] = useState<string>(byCompany(ALL_APPS)[0]?.company ?? "");
   // Widgets still read mock data and ignore the filters until their vertical task (04–09)
   const apps = ALL_APPS;
@@ -195,13 +197,24 @@ export default function App() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel title="Roles" sub="Volume vs. interview rate (%)">
-          <RolesChart apps={apps} />
+          <PanelState
+            isLoading={patterns.isPending}
+            error={patterns.error}
+            isEmpty={patterns.data?.roles.length === 0}
+            onRetry={() => void patterns.refetch()}
+          >
+            {patterns.data && <RolesChart roles={patterns.data.roles} />}
+          </PanelState>
         </Panel>
         <Panel title="Weekly rhythm" sub="When you apply vs. when they say no">
-          <WeekdayChart apps={apps} />
+          <PanelState isLoading={patterns.isPending} error={patterns.error} onRetry={() => void patterns.refetch()}>
+            {patterns.data && <WeekdayChart weekdays={patterns.data.weekdays} />}
+          </PanelState>
         </Panel>
         <Panel title="Inbox clock" sub="Hour of day replies land (UTC)">
-          <HourChart apps={apps} />
+          <PanelState isLoading={patterns.isPending} error={patterns.error} onRetry={() => void patterns.refetch()}>
+            {patterns.data && <HourChart hours={patterns.data.hours} />}
+          </PanelState>
         </Panel>
       </div>
 

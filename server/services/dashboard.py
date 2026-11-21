@@ -44,7 +44,8 @@ def get_filter_options(apps: Sequence[Application]) -> FilterOptionsOut:
     companies.sort(key=lambda option: option.name.lower())
 
     roles = sorted({app.role for app in apps if app.role}, key=str.lower)
-    return FilterOptionsOut(companies=companies, roles=roles, statuses=_STATUS_ORDER)
+    unknown_role = any(not app.role for app in apps)
+    return FilterOptionsOut(companies=companies, roles=roles, unknownRole=unknown_role, statuses=_STATUS_ORDER)
 
 def to_application_out(app: Application) -> ApplicationOut:
     emails = []

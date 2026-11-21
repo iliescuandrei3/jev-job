@@ -1,13 +1,17 @@
 import { useMemo, useRef, useState } from "react";
 import { Search, X, Building2, Briefcase, CircleDot } from "lucide-react";
+import { UNKNOWN_ROLE_LABEL } from "@/lib/format";
 import { statusLabel } from "@/lib/status";
 import type { DashboardFilters, FilterOptions, Status } from "@/lib/types";
 import { StatusDot } from "./StatusDot";
 
-/** `value` is what the filter stores (company key, role, status); `label` is what the user sees. */
+/**
+ * `value` is what the filter stores (company key, role, status); `label` is what the user sees.
+ * A role with value "" stands for the `unknownRole` flag.
+ */
 type Suggestion = { kind: "company" | "role" | "status"; value: string; label: string };
 
-const NO_OPTIONS: FilterOptions = { companies: [], roles: [], statuses: [] };
+const NO_OPTIONS: FilterOptions = { companies: [], roles: [], unknownRole: false, statuses: [] };
 
 export function SearchBar({
   filters,
@@ -38,13 +42,17 @@ export function SearchBar({
     options.roles.filter((r) => r.toLowerCase().includes(q) && !filters.roles.includes(r)).slice(0, 4).forEach((v) =>
       s.push({ kind: "role", value: v, label: v }),
     );
+    if (options.unknownRole && !filters.unknownRole && UNKNOWN_ROLE_LABEL.toLowerCase().includes(q)) {
+      s.push({ kind: "role", value: "", label: UNKNOWN_ROLE_LABEL });
+    }
     return s;
   }, [q, options, filters]);
 
   const add = (s: Suggestion) => {
     const next = { ...filters, q: "" };
     if (s.kind === "company") next.companies = [...filters.companies, s.value];
-    if (s.kind === "role") next.roles = [...filters.roles, s.value];
+    if (s.kind === "role" && s.value === "") next.unknownRole = true;
+    else if (s.kind === "role") next.roles = [...filters.roles, s.value];
     if (s.kind === "status") next.statuses = [...filters.statuses, s.value as Status];
     onChange(next);
     inputRef.current?.focus();
@@ -53,6 +61,7 @@ export function SearchBar({
   const chips: (Suggestion & { remove: () => void })[] = [
     ...filters.companies.map((v) => ({ kind: "company" as const, value: v, label: companyNames.get(v) ?? v, remove: () => onChange({ ...filters, companies: filters.companies.filter((x) => x !== v) }) })),
     ...filters.roles.map((v) => ({ kind: "role" as const, value: v, label: v, remove: () => onChange({ ...filters, roles: filters.roles.filter((x) => x !== v) }) })),
+    ...(filters.unknownRole ? [{ kind: "role" as const, value: "", label: UNKNOWN_ROLE_LABEL, remove: () => onChange({ ...filters, unknownRole: false }) }] : []),
     ...filters.statuses.map((v) => ({ kind: "status" as const, value: v, label: statusLabel(v), remove: () => onChange({ ...filters, statuses: filters.statuses.filter((x) => x !== v) }) })),
   ];
 

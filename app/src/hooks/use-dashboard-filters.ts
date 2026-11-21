@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { DashboardFilters } from "@/lib/types";
 
-export const EMPTY_FILTERS: DashboardFilters = { q: "", companies: [], roles: [], statuses: [], rangeDays: null };
+export const EMPTY_FILTERS: DashboardFilters = { q: "", companies: [], roles: [], unknownRole: false, statuses: [], rangeDays: null };
 
 const SEARCH_DEBOUNCE_MS = 300;
 

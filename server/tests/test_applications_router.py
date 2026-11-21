@@ -86,6 +86,19 @@ def test_list_rejects_bad_params(client: TestClient) -> None:
     assert client.get("/applications", params={"limit": 0}).status_code == 422
     assert client.get("/applications", params={"offset": -1}).status_code == 422
 
+def test_list_unknown_role_filter(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    no_role = _email("k1", 5, ApplicationStatus.Applied, "Klarna", "")
+
+    async def fake_get_job_emails() -> list[JobEmail]:
+        return [*EMAILS, no_role]
+
+    monkeypatch.setattr(dashboard, "get_job_emails", fake_get_job_emails)
+    body = client.get("/applications", params={"unknownRole": "true"}).json()
+    assert [item["id"] for item in body["items"]] == ["k1"]
+    body = client.get("/applications", params={"roles": ["Data Engineer"], "unknownRole": "true"}).json()
+    assert [item["id"] for item in body["items"]] == ["k1", "n1"]
+    assert client.get("/applications").json()["total"] == 3
+
 def test_detail(client: TestClient) -> None:
     response = client.get("/applications/s1")
     assert response.status_code == 200

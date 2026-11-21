@@ -2,12 +2,12 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  STATUSES, byRole, fromMockStatus, funnel, heatmap, hourPattern, statusBreakdown, weekdayPattern, weekly,
+  STATUSES, fromMockStatus, funnel, heatmap, statusBreakdown, weekly,
   type Application,
 } from "@/lib/analytics";
-import { fmtDate } from "@/lib/format";
+import { fmtDate, fmtWeekday, roleLabel } from "@/lib/format";
 import { statusColor, statusLabel } from "@/lib/status";
-import type { ApplicationSummary, DateRange } from "@/lib/types";
+import type { ApplicationSummary, DateRange, HourStat, RoleStat, WeekdayStat } from "@/lib/types";
 import { StatusDot } from "./StatusDot";
 
 const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false } as const;
@@ -140,8 +140,9 @@ export function Heatmap({ apps }: { apps: Application[] }) {
   );
 }
 
-export function RolesChart({ apps }: { apps: Application[] }) {
-  const data = byRole(apps).slice(0, 8);
+export function RolesChart({ roles }: { roles: RoleStat[] }) {
+  // Bars share one axis, so the 0–1 rate is drawn as a whole percentage
+  const data = roles.map((r) => ({ role: roleLabel(r.role), count: r.count, interviewRate: Math.round(r.interviewRate * 100) }));
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={data} layout="vertical" margin={{ left: 40, right: 10 }}>
@@ -155,29 +156,29 @@ export function RolesChart({ apps }: { apps: Application[] }) {
   );
 }
 
-export function WeekdayChart({ apps }: { apps: Application[] }) {
+export function WeekdayChart({ weekdays }: { weekdays: WeekdayStat[] }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
-      <BarChart data={weekdayPattern(apps)} margin={{ left: -24 }}>
-        <XAxis dataKey="day" {...axis} />
+      <BarChart data={weekdays} margin={{ left: -24 }}>
+        <XAxis dataKey="day" {...axis} tickFormatter={fmtWeekday} />
         <YAxis {...axis} allowDecimals={false} />
-        <Tooltip {...tooltip} />
-        <Bar dataKey="sent" name="Applications sent" fill="var(--primary)" radius={4} />
+        <Tooltip {...tooltip} labelFormatter={(d) => fmtWeekday(String(d))} />
+        <Bar dataKey="applied" name="Applications sent" fill="var(--primary)" radius={4} />
         <Bar dataKey="rejections" name="Rejections received" fill="var(--status-rejected)" radius={4} />
       </BarChart>
     </ResponsiveContainer>
   );
 }
 
-export function HourChart({ apps }: { apps: Application[] }) {
+export function HourChart({ hours }: { hours: HourStat[] }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
-      <BarChart data={hourPattern(apps)} margin={{ left: -24 }}>
+      <BarChart data={hours} margin={{ left: -24 }}>
         <XAxis dataKey="hour" {...axis} interval={2} tickFormatter={(h) => `${h}h`} />
         <YAxis {...axis} allowDecimals={false} />
         <Tooltip {...tooltip} labelFormatter={(h) => `${h}:00 – ${h}:59`} />
-        <Bar dataKey="Interview" stackId="a" fill="var(--status-interview)" />
-        <Bar dataKey="Rejected" stackId="a" fill="var(--status-rejected)" radius={[3, 3, 0, 0]} />
+        <Bar dataKey="interview" name="Interview" stackId="a" fill="var(--status-interview)" />
+        <Bar dataKey="rejected" name="Rejected" stackId="a" fill="var(--status-rejected)" radius={[3, 3, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

@@ -53,3 +53,23 @@ def test_range_days_boundary_is_inclusive() -> None:
 
 def test_filters_combine() -> None:
     assert _ids(DashboardFilters(roles=["Backend Engineer"], statuses=[Status.Rejected], rangeDays=60)) == ["c"]
+
+# "d" has no role
+WITH_UNKNOWN = [*APPS, _app("d", "Klarna", "", Status.Applied, 5)]
+
+def _ids_with_unknown(filters: DashboardFilters) -> list[str]:
+    return [app.id for app in apply_filters(WITH_UNKNOWN, filters, NOW)]
+
+def test_unknown_role_alone() -> None:
+    assert _ids_with_unknown(DashboardFilters(unknownRole=True)) == ["d"]
+
+def test_unknown_role_is_ored_with_roles() -> None:
+    assert _ids_with_unknown(DashboardFilters(roles=["Data Engineer"], unknownRole=True)) == ["b", "d"]
+
+def test_roles_without_unknown_role_leave_out_empty_roles() -> None:
+    assert _ids_with_unknown(DashboardFilters(roles=["Backend Engineer"])) == ["a", "c"]
+    assert _ids_with_unknown(DashboardFilters()) == ["a", "b", "c", "d"]
+
+def test_unknown_role_combines_with_other_filters() -> None:
+    assert _ids_with_unknown(DashboardFilters(unknownRole=True, statuses=[Status.Rejected])) == []
+    assert _ids_with_unknown(DashboardFilters(unknownRole=True, companies=["klarna"], rangeDays=10)) == ["d"]

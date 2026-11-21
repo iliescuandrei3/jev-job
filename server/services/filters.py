@@ -5,6 +5,11 @@ from server.schemas.application import Application
 from server.schemas.dashboard import DashboardFilters
 
 
+def _matches_role(role: str, filters: DashboardFilters) -> bool:
+    if not role:
+        return filters.unknownRole
+    return role.lower() in {selected.lower() for selected in filters.roles}
+
 def _matches(app: Application, filters: DashboardFilters, since: datetime | None) -> bool:
     if filters.q:
         q = filters.q.strip().lower()
@@ -12,7 +17,7 @@ def _matches(app: Application, filters: DashboardFilters, since: datetime | None
             return False
     if filters.companies and app.companyKey not in filters.companies:
         return False
-    if filters.roles and app.role.lower() not in {role.lower() for role in filters.roles}:
+    if (filters.roles or filters.unknownRole) and not _matches_role(app.role, filters):
         return False
     if filters.statuses and app.status not in filters.statuses:
         return False

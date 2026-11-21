@@ -18,6 +18,8 @@ export interface DashboardFilters {
   q: string;
   companies: string[]; // companyKeys
   roles: string[];
+  /** Applications without a role; OR'd with `roles` */
+  unknownRole: boolean;
   statuses: Status[];
   rangeDays: number | null;
 }
@@ -32,6 +34,8 @@ export interface CompanyOption {
 export interface FilterOptions {
   companies: CompanyOption[];
   roles: string[];
+  /** Some application has no role (selectable with the `unknownRole` filter) */
+  unknownRole: boolean;
   statuses: Status[];
 }
 
@@ -86,6 +90,43 @@ export interface ApplicationList {
   /** From the earliest appliedAt of `items` to now: the time axis of the process lanes */
   range: DateRange;
   items: ApplicationSummary[];
+}
+
+/** server/schemas/dashboard.py · RoleStatOut */
+export interface RoleStat {
+  /** "" for applications without a role */
+  role: string;
+  count: number;
+  /** 0–1 */
+  interviewRate: number;
+}
+
+/** server/schemas/dashboard.py · Weekday */
+export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+/** server/schemas/dashboard.py · WeekdayStatOut */
+export interface WeekdayStat {
+  day: Weekday;
+  applied: number;
+  rejections: number;
+}
+
+/** server/schemas/dashboard.py · HourStatOut */
+export interface HourStat {
+  /** 0–23, UTC */
+  hour: number;
+  interview: number;
+  rejected: number;
+}
+
+/** server/schemas/dashboard.py · PatternsOut (GET /dashboard/patterns) */
+export interface PatternsOut {
+  /** Top 8 by count */
+  roles: RoleStat[];
+  /** Mon–Sun */
+  weekdays: WeekdayStat[];
+  /** Every hour 0–23 */
+  hours: HourStat[];
 }
 
 /** server/routers/auth.py · the session user stored at /auth/callback */
