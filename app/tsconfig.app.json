@@ -17,6 +17,7 @@
     "jsx": "react-jsx",
 
     /* Linting */
+    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
@@ -27,5 +28,8 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  /* Unused shadcn/ui files import packages that aren't installed. A ui/ file the app imports is
+     still type-checked. Remove this once task 10 deletes the unused ones. */
+  "exclude": ["src/components/ui"]
 }

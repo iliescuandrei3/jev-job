@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Activity,
   Building2,
@@ -13,18 +13,11 @@ import {
   Zap,
 } from "lucide-react";
 import { MOCK_EMAILS } from "@/lib/mock-data";
-import {
-  EMPTY_FILTERS,
-  applyFilters,
-  buildApplications,
-  byCompany,
-  dur,
-  fmtDate,
-  fmtDays,
-  insights,
-  kpis,
-  type Filters,
-} from "@/lib/analytics";
+import { buildApplications, byCompany, dur, fromMockStatus, insights, kpis } from "@/lib/analytics";
+import { fmtDate, fmtDays, pct } from "@/lib/format";
+import { useDashboardFilters } from "@/hooks/use-dashboard-filters";
+import { useFilterOptions } from "@/hooks/use-filter-options";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 import { SearchBar } from "@/components/dashboard/SearchBar";
 import { StatusDot, StatusPill } from "@/components/dashboard/StatusDot";
 import {
@@ -41,13 +34,13 @@ import {
 
 const ALL_APPS = buildApplications(MOCK_EMAILS);
 const ALL_COMPANIES = [...new Set(ALL_APPS.map((a) => a.company))].sort();
-const ALL_ROLES = [...new Set(ALL_APPS.map((a) => a.role))].sort();
-const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 export default function App() {
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const { filters, setFilters } = useDashboardFilters();
+  const filterOptions = useFilterOptions();
   const [focusCompany, setFocusCompany] = useState<string>(byCompany(ALL_APPS)[0]?.company ?? "");
-  const apps = useMemo(() => applyFilters(ALL_APPS, filters), [filters]);
+  // Widgets still read mock data and ignore the filters until their vertical task (04–09)
+  const apps = ALL_APPS;
   const k = kpis(apps);
   const ins = insights(apps);
   const companies = byCompany(apps);
@@ -90,18 +83,16 @@ export default function App() {
             Pipeline<span className="text-primary">.</span>
           </h1>
         </div>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          Every recruiting email, turned into processes, funnels and patterns. Filter anything
-          below.
-        </p>
+        <div className="flex flex-col items-end gap-3">
+          <LogoutButton />
+          <p className="max-w-sm text-right text-sm text-muted-foreground">
+            Every recruiting email, turned into processes, funnels and patterns. Filter anything
+            below.
+          </p>
+        </div>
       </header>
 
-      <SearchBar
-        filters={filters}
-        onChange={setFilters}
-        companies={ALL_COMPANIES}
-        roles={ALL_ROLES}
-      />
+      <SearchBar filters={filters} onChange={setFilters} options={filterOptions.data} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         {stats.map((s, i) => (
@@ -215,7 +206,7 @@ export default function App() {
               <span className="flex-1 truncate text-sm">{company}</span>
               <span className="flex gap-1">
                 {list.map((a) => (
-                  <StatusDot key={a.threadId} status={a.status} />
+                  <StatusDot key={a.threadId} status={fromMockStatus(a.status)} />
                 ))}
               </span>
             </button>
@@ -251,7 +242,7 @@ export default function App() {
                     <td className="font-mono text-xs">{a.emails.length}</td>
                     <td className="font-mono text-xs">{fmtDays(dur(a))}</td>
                     <td>
-                      <StatusPill status={a.status} />
+                      <StatusPill status={fromMockStatus(a.status)} />
                     </td>
                   </tr>
                 ))}
@@ -330,13 +321,13 @@ function CompanyDeepDive({
           <div key={a.threadId}>
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium">{a.role}</span>
-              <StatusPill status={a.status} />
+              <StatusPill status={fromMockStatus(a.status)} />
             </div>
             <ol className="relative ml-1 space-y-3 border-l pl-4">
               {a.emails.map((e) => (
                 <li key={e.emailId} className="relative">
                   <StatusDot
-                    status={e.applicationStatus}
+                    status={fromMockStatus(e.applicationStatus)}
                     className="absolute -left-[21px] top-1.5 ring-4 ring-card"
                   />
                   <div className="flex items-baseline justify-between gap-2">

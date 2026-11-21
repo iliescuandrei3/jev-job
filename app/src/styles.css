@@ -32,6 +32,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-applied: var(--status-applied);
+  --color-assessment: var(--status-assessment);
   --color-interview: var(--status-interview);
   --color-offer: var(--status-offer);
   --color-rejected: var(--status-rejected);
@@ -62,6 +63,7 @@
   --ring: oklch(0.89 0.19 125);
 
   --status-applied: oklch(0.72 0.12 240);
+  --status-assessment: oklch(0.78 0.11 195);
   --status-interview: oklch(0.82 0.15 75);
   --status-offer: oklch(0.89 0.19 125);
   --status-rejected: oklch(0.68 0.18 25);

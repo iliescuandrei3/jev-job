@@ -1,6 +1,9 @@
 import { Component, StrictMode, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import { QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
+import { AuthGate } from "./components/auth/AuthGate";
+import { queryClient } from "./lib/query-client";
 import "./styles.css";
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -57,7 +60,11 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <AppErrorBoundary>
-      <App />
+      <QueryClientProvider client={queryClient}>
+        <AuthGate>
+          <App />
+        </AuthGate>
+      </QueryClientProvider>
     </AppErrorBoundary>
   </StrictMode>,
 );

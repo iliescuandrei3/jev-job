@@ -2,11 +2,13 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  STATUSES, byRole, dur, fmtDate, fmtDays, funnel, heatmap, hourPattern, statusBreakdown, weekdayPattern, weekly,
+  STATUSES, byRole, fromMockStatus, funnel, heatmap, hourPattern, statusBreakdown, weekdayPattern, weekly,
   type Application,
 } from "@/lib/analytics";
+import { fmtDate } from "@/lib/format";
 import { NOW } from "@/lib/mock-data";
-import { STATUS_VAR, StatusDot } from "./StatusDot";
+import { statusColor, statusLabel } from "@/lib/status";
+import { StatusDot } from "./StatusDot";
 
 const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false } as const;
 const tooltip = {
@@ -63,7 +65,7 @@ export function WeeklyChart({ apps }: { apps: Application[] }) {
         <YAxis {...axis} allowDecimals={false} />
         <Tooltip {...tooltip} />
         {STATUSES.map((s) => (
-          <Area key={s} type="monotone" dataKey={s} stackId="1" stroke={STATUS_VAR[s]} fill={STATUS_VAR[s]} fillOpacity={0.35} />
+          <Area key={s} type="monotone" dataKey={s} stackId="1" stroke={statusColor(fromMockStatus(s))} fill={statusColor(fromMockStatus(s))} fillOpacity={0.35} />
         ))}
       </AreaChart>
     </ResponsiveContainer>
@@ -79,7 +81,7 @@ export function StatusDonut({ apps }: { apps: Application[] }) {
         <ResponsiveContainer>
           <PieChart>
             <Pie data={data} dataKey="value" nameKey="status" innerRadius={55} outerRadius={80} paddingAngle={2} stroke="none">
-              {data.map((d) => <Cell key={d.status} fill={STATUS_VAR[d.status]} />)}
+              {data.map((d) => <Cell key={d.status} fill={statusColor(fromMockStatus(d.status))} />)}
             </Pie>
             <Tooltip {...tooltip} />
           </PieChart>
@@ -92,8 +94,8 @@ export function StatusDonut({ apps }: { apps: Application[] }) {
       <ul className="flex-1 space-y-2 text-sm">
         {data.map((d) => (
           <li key={d.status} className="flex items-center gap-2">
-            <StatusDot status={d.status} />
-            {d.status}
+            <StatusDot status={fromMockStatus(d.status)} />
+            {statusLabel(fromMockStatus(d.status))}
             <span className="ml-auto font-mono text-muted-foreground">{Math.round((d.value / (total || 1)) * 100)}%</span>
           </li>
         ))}
@@ -201,7 +203,7 @@ export function ProcessLanes({ apps, onPick }: { apps: Application[]; onPick: (c
             <div className="relative h-5 rounded bg-secondary/50">
               <div
                 className="absolute top-1/2 h-2.5 -translate-y-1/2 rounded-full"
-                style={{ left: `${left}%`, width: `${width}%`, background: STATUS_VAR[a.status] }}
+                style={{ left: `${left}%`, width: `${width}%`, background: statusColor(fromMockStatus(a.status)) }}
               />
               {a.emails.map((e) => (
                 <span
@@ -224,5 +226,3 @@ export function ProcessLanes({ apps, onPick }: { apps: Application[]; onPick: (c
     </div>
   );
 }
-
-export { dur, fmtDays };

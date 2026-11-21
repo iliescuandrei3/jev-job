@@ -2,6 +2,7 @@ credentials.json
 token.json
 data/
 .env
+docs/
 
 __pycache__
 *.pyc

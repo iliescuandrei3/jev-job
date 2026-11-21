@@ -1,53 +1,59 @@
 import { useMemo, useRef, useState } from "react";
 import { Search, X, Building2, Briefcase, CircleDot } from "lucide-react";
-import { STATUSES, type DerivedStatus, type Filters } from "@/lib/analytics";
+import { statusLabel } from "@/lib/status";
+import type { DashboardFilters, FilterOptions, Status } from "@/lib/types";
 import { StatusDot } from "./StatusDot";
 
-type Suggestion = { kind: "company" | "role" | "status"; value: string };
+/** `value` is what the filter stores (company key, role, status); `label` is what the user sees. */
+type Suggestion = { kind: "company" | "role" | "status"; value: string; label: string };
+
+const NO_OPTIONS: FilterOptions = { companies: [], roles: [], statuses: [] };
 
 export function SearchBar({
   filters,
   onChange,
-  companies,
-  roles,
+  options = NO_OPTIONS,
 }: {
-  filters: Filters;
-  onChange: (f: Filters) => void;
-  companies: string[];
-  roles: string[];
+  filters: DashboardFilters;
+  onChange: (f: DashboardFilters) => void;
+  /** From GET /dashboard/filters; undefined while loading */
+  options?: FilterOptions;
 }) {
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const q = filters.text.toLowerCase().trim();
+  const q = filters.q.toLowerCase().trim();
+
+  const companyNames = useMemo(() => new Map(options.companies.map((c) => [c.key, c.name])), [options.companies]);
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!q) return [];
     const s: Suggestion[] = [];
-    STATUSES.filter((x) => x.toLowerCase().includes(q) && !filters.statuses.includes(x)).forEach((v) =>
-      s.push({ kind: "status", value: v }),
+    // Match the label ("Offer") and the backend value ("accepted")
+    options.statuses.filter((x) => (statusLabel(x).toLowerCase().includes(q) || x.includes(q)) && !filters.statuses.includes(x)).forEach((v) =>
+      s.push({ kind: "status", value: v, label: statusLabel(v) }),
     );
-    companies.filter((c) => c.toLowerCase().includes(q) && !filters.companies.includes(c)).slice(0, 5).forEach((v) =>
-      s.push({ kind: "company", value: v }),
+    options.companies.filter((c) => c.name.toLowerCase().includes(q) && !filters.companies.includes(c.key)).slice(0, 5).forEach((c) =>
+      s.push({ kind: "company", value: c.key, label: c.name }),
     );
-    roles.filter((r) => r.toLowerCase().includes(q) && !filters.roles.includes(r)).slice(0, 4).forEach((v) =>
-      s.push({ kind: "role", value: v }),
+    options.roles.filter((r) => r.toLowerCase().includes(q) && !filters.roles.includes(r)).slice(0, 4).forEach((v) =>
+      s.push({ kind: "role", value: v, label: v }),
     );
     return s;
-  }, [q, companies, roles, filters]);
+  }, [q, options, filters]);
 
   const add = (s: Suggestion) => {
-    const next = { ...filters, text: "" };
+    const next = { ...filters, q: "" };
     if (s.kind === "company") next.companies = [...filters.companies, s.value];
     if (s.kind === "role") next.roles = [...filters.roles, s.value];
-    if (s.kind === "status") next.statuses = [...filters.statuses, s.value as DerivedStatus];
+    if (s.kind === "status") next.statuses = [...filters.statuses, s.value as Status];
     onChange(next);
     inputRef.current?.focus();
   };
 
   const chips: (Suggestion & { remove: () => void })[] = [
-    ...filters.companies.map((v) => ({ kind: "company" as const, value: v, remove: () => onChange({ ...filters, companies: filters.companies.filter((x) => x !== v) }) })),
-    ...filters.roles.map((v) => ({ kind: "role" as const, value: v, remove: () => onChange({ ...filters, roles: filters.roles.filter((x) => x !== v) }) })),
-    ...filters.statuses.map((v) => ({ kind: "status" as const, value: v, remove: () => onChange({ ...filters, statuses: filters.statuses.filter((x) => x !== v) }) })),
+    ...filters.companies.map((v) => ({ kind: "company" as const, value: v, label: companyNames.get(v) ?? v, remove: () => onChange({ ...filters, companies: filters.companies.filter((x) => x !== v) }) })),
+    ...filters.roles.map((v) => ({ kind: "role" as const, value: v, label: v, remove: () => onChange({ ...filters, roles: filters.roles.filter((x) => x !== v) }) })),
+    ...filters.statuses.map((v) => ({ kind: "status" as const, value: v, label: statusLabel(v), remove: () => onChange({ ...filters, statuses: filters.statuses.filter((x) => x !== v) }) })),
   ];
 
   const Icon = ({ kind }: { kind: Suggestion["kind"] }) =>
@@ -59,23 +65,23 @@ export function SearchBar({
         <Search className="h-5 w-5 text-primary" />
         {chips.map((c) => (
           <span key={c.kind + c.value} className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs">
-            {c.kind === "status" ? <StatusDot status={c.value as DerivedStatus} /> : <Icon kind={c.kind} />}
+            {c.kind === "status" ? <StatusDot status={c.value as Status} /> : <Icon kind={c.kind} />}
             <span className="text-muted-foreground">{c.kind}:</span>
-            {c.value}
-            <button onClick={c.remove} className="text-muted-foreground hover:text-foreground" aria-label={`Remove ${c.value}`}>
+            {c.label}
+            <button onClick={c.remove} className="text-muted-foreground hover:text-foreground" aria-label={`Remove ${c.label}`}>
               <X className="h-3 w-3" />
             </button>
           </span>
         ))}
         <input
           ref={inputRef}
-          value={filters.text}
-          onChange={(e) => onChange({ ...filters, text: e.target.value })}
+          value={filters.q}
+          onChange={(e) => onChange({ ...filters, q: e.target.value })}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && suggestions[0]) add(suggestions[0]);
-            if (e.key === "Backspace" && !filters.text && chips.length) chips[chips.length - 1]!.remove();
+            if (e.key === "Backspace" && !filters.q && chips.length) chips[chips.length - 1]!.remove();
           }}
           placeholder={chips.length ? "Add another filter…" : "Search companies, roles, statuses — e.g. “stripe”, “frontend”, “interview”"}
           className="min-w-[200px] flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
@@ -106,8 +112,8 @@ export function SearchBar({
               onClick={() => add(s)}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-accent ${i === 0 ? "bg-accent/60" : ""}`}
             >
-              {s.kind === "status" ? <StatusDot status={s.value as DerivedStatus} /> : <Icon kind={s.kind} />}
-              <span>{s.value}</span>
+              {s.kind === "status" ? <StatusDot status={s.value as Status} /> : <Icon kind={s.kind} />}
+              <span>{s.label}</span>
               <span className="eyebrow ml-auto">{s.kind}</span>
             </button>
           ))}

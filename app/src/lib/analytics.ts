@@ -1,10 +1,22 @@
 import type { ApplicationStatus, Email } from "./mock-data";
 import { NOW } from "./mock-data";
+import type { Status } from "./types";
 
 const DAY = 86_400_000;
 export const GHOST_AFTER_DAYS = 21;
 
 export type DerivedStatus = ApplicationStatus | "Ghosted";
+
+/** Temporary bridge: mock statuses → backend statuses, for widgets still on mock data. Goes away in task 10. */
+const MOCK_TO_STATUS: Record<DerivedStatus, Status> = {
+  Applied: "applied",
+  Interview: "interview",
+  Offer: "accepted",
+  Rejected: "rejected",
+  Ghosted: "ghosted",
+  Undefined: "undefined",
+};
+export const fromMockStatus = (status: DerivedStatus): Status => MOCK_TO_STATUS[status];
 
 export interface Application {
   threadId: string;
@@ -219,6 +231,3 @@ export function insights(apps: Application[]) {
 }
 
 export const dur = (a: Application) => (a.lastAt.getTime() - a.appliedAt.getTime()) / DAY;
-export const fmtDays = (d: number) => (d < 1 ? `${Math.max(1, Math.round(d * 24))}h` : `${Math.round(d)}d`);
-export const fmtDate = (d: Date | string) =>
-  new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit", timeZone: "UTC" });
