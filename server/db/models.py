@@ -44,7 +44,9 @@ class FailedEmailIdentifier(Document):
 
 class HistoryCheckpoint(Document):
     id: str = "gmail"
-    historyId: str
+    # None until a sync has seen a Gmail history id (e.g. an empty mailbox)
+    historyId: Optional[str] = None
+    lastSyncedAt: Optional[datetime] = None
 
     class Settings:
         name = "history-checkpoint"

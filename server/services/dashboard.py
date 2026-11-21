@@ -1,7 +1,10 @@
 from collections.abc import Callable, Sequence
 from datetime import datetime
 
-from server.db.emails import get_job_emails
+from server.db.checkpoint import get_last_synced_at
+from server.db.email_identifiers import count_email_identifiers
+from server.db.emails import count_emails, get_job_emails
+from server.db.failed_email_identifiers import count_failed_email_ids
 from server.schemas.application import (
     Application,
     ApplicationEmailOut,
@@ -14,7 +17,7 @@ from server.schemas.application import (
     Status,
 )
 from server.schemas.company import CompanyDetailOut
-from server.schemas.dashboard import CompanyOption, DashboardFilters, FilterOptionsOut
+from server.schemas.dashboard import CompanyOption, DashboardFilters, FilterOptionsOut, SyncOut
 from server.services.applications import group_into_applications
 from server.services.email_templates import email_text
 from server.services.filters import apply_filters
@@ -129,4 +132,15 @@ def get_company(apps: Sequence[Application], company_key: str) -> CompanyDetailO
         emailCount=sum(len(app.emails) for app in group),
         repeat=len(group) > 1,
         applications=[to_application_out(app) for app in ordered],
+    )
+
+async def get_sync_stats(now: datetime) -> SyncOut:
+    """Unfiltered sync counters for the header. Counts don't load documents; grouping gives `unassigned`."""
+    return SyncOut(
+        totalEmailsScanned=await count_email_identifiers(),
+        jobEmails=await count_emails(),
+        unassignedEmails=group_into_applications(await get_job_emails(), now).unassigned,
+        failedEmails=await count_failed_email_ids(),
+        lastSyncedAt=await get_last_synced_at(),
+        generatedAt=now,
     )

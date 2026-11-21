@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -165,5 +165,17 @@ class HeatmapOut(BaseModel):
 class TimelineOut(BaseModel):
     weekly: list[WeekCountsOut]
     heatmap: HeatmapOut
+
+    model_config = ConfigDict(extra="forbid")
+
+# --- Sync (GET /dashboard/sync) ---
+
+class SyncOut(BaseModel):
+    totalEmailsScanned: int  # every email id a sync has looked at, job or not
+    jobEmails: int  # emails stored as job emails
+    unassignedEmails: int  # job emails without a company, so in no application
+    failedEmails: int  # ids Gmail couldn't return (HTTP 404)
+    lastSyncedAt: datetime | None  # end of the last finished sync; None before the first
+    generatedAt: datetime
 
     model_config = ConfigDict(extra="forbid")

@@ -18,11 +18,14 @@ export class UnauthorizedError extends Error {
 /** Any other non-2xx response. */
 export class ApiError extends Error {
   readonly status: number;
+  /** The response's `detail` field when the body was JSON, e.g. `{ message, job_id }` on a 409 from /emails/refresh. */
+  readonly detail: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, detail?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.detail = detail;
   }
 }
 
@@ -47,16 +50,18 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
   const res = await fetch(apiUrl(path), { ...init, credentials: "include" });
   if (res.status === 401) throw new UnauthorizedError();
   if (!res.ok) {
-    let detail = res.statusText;
+    let text = res.statusText;
+    let detail: unknown;
     try {
       const body: unknown = await res.json();
-      if (typeof body === "object" && body !== null && "detail" in body && typeof body.detail === "string") {
+      if (typeof body === "object" && body !== null && "detail" in body) {
         detail = body.detail;
+        if (typeof body.detail === "string") text = body.detail;
       }
     } catch {
       // not JSON: keep statusText
     }
-    throw new ApiError(res.status, `Request failed (${res.status}): ${detail}`);
+    throw new ApiError(res.status, `Request failed (${res.status}): ${text}`, detail);
   }
   return (await res.json()) as T;
 }

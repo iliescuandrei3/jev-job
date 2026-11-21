@@ -7,3 +7,6 @@ async def add_email_identifiers(email_identifiers: list[EmailIdentifierData]) ->
 
 async def get_all_email_identifiers() -> list[EmailIdentifier]:
     return await EmailIdentifier.find_all().to_list()
+
+async def count_email_identifiers() -> int:
+    return await EmailIdentifier.find_all().count()

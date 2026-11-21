@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MOCK_EMAILS } from "@/lib/mock-data";
+import { fmtRelative } from "@/lib/format";
 import { useDashboardFilters } from "@/hooks/use-dashboard-filters";
 import { useFilterOptions } from "@/hooks/use-filter-options";
 import { useApplications } from "@/hooks/use-applications";
@@ -7,6 +7,8 @@ import { useCompanies, useCompany } from "@/hooks/use-companies";
 import { useOverview } from "@/hooks/use-overview";
 import { usePatterns } from "@/hooks/use-patterns";
 import { useTimeline } from "@/hooks/use-timeline";
+import { useSyncJob } from "@/hooks/use-sync-job";
+import { useSyncStats } from "@/hooks/use-sync-stats";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { ApplicationsTable } from "@/components/dashboard/ApplicationsTable";
 import { CompanyGrid } from "@/components/dashboard/CompanyGrid";
@@ -14,6 +16,7 @@ import { CompanyHistory, CompanyPicker } from "@/components/dashboard/CompanyHis
 import { InsightsStrip, StatTiles } from "@/components/dashboard/Overview";
 import { PanelState } from "@/components/dashboard/PanelState";
 import { SearchBar } from "@/components/dashboard/SearchBar";
+import { SyncButton } from "@/components/dashboard/SyncButton";
 import {
   Funnel,
   Heatmap,
@@ -43,18 +46,39 @@ export default function App() {
   const [pickedCompany, setFocusCompany] = useState<string | null>(null);
   const focusCompany = pickedCompany ?? companies.data?.[0]?.key ?? null;
   const company = useCompany(focusCompany);
+  const syncStats = useSyncStats();
+  const sync = useSyncJob();
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 md:px-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="eyebrow">job hunt telemetry · {MOCK_EMAILS.length} emails parsed</p>
+          <p className="eyebrow">
+            job hunt telemetry
+            {syncStats.data && (
+              <>
+                {" "}
+                · {syncStats.data.jobEmails} emails parsed ·{" "}
+                {syncStats.data.lastSyncedAt ? `last synced ${fmtRelative(syncStats.data.lastSyncedAt)}` : "never synced"}
+              </>
+            )}
+          </p>
           <h1 className="mt-1 text-4xl font-bold tracking-tight md:text-5xl">
             Pipeline<span className="text-primary">.</span>
           </h1>
         </div>
         <div className="flex flex-col items-end gap-3">
-          <LogoutButton />
+          <div className="flex items-start gap-3">
+            <SyncButton
+              onSync={sync.start}
+              isStarting={sync.isStarting}
+              isRunning={sync.isRunning}
+              jobState={sync.jobState}
+              connectionMessage={sync.connectionMessage}
+              error={sync.error}
+            />
+            <LogoutButton />
+          </div>
           <p className="max-w-sm text-right text-sm text-muted-foreground">
             Every recruiting email, turned into processes, funnels and patterns. Filter anything
             below.
@@ -234,10 +258,6 @@ export default function App() {
           {applications.data && <ApplicationsTable items={applications.data.items} onPick={setFocusCompany} />}
         </PanelState>
       </Panel>
-
-      <footer className="pb-4 text-center font-mono text-xs text-muted-foreground">
-        mock data · wire up your Mongo API in src/lib/mock-data.ts
-      </footer>
     </main>
   );
 }

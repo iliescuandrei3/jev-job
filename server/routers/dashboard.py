@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, Query
 
 from server.routers.auth import get_current_user
 from server.routers.dependencies import get_dashboard_filters
-from server.schemas.dashboard import DashboardFilters, FilterOptionsOut, OverviewOut, PatternsOut, TimelineOut
+from server.schemas.dashboard import DashboardFilters, FilterOptionsOut, OverviewOut, PatternsOut, SyncOut, TimelineOut
 from server.services import metrics
-from server.services.dashboard import get_filter_options, load_applications
+from server.services.dashboard import get_filter_options, get_sync_stats, load_applications
 
 router = APIRouter(
     prefix="/dashboard",
@@ -45,3 +45,8 @@ async def get_timeline(
     now = datetime.now(timezone.utc)
     apps = (await load_applications(filters, now)).applications
     return TimelineOut(weekly=metrics.weekly(apps, now, weeks), heatmap=metrics.heatmap(apps, now, weeks))
+
+@router.get("/sync", response_model=SyncOut)
+async def get_sync() -> SyncOut:
+    # Unfiltered: counts for the whole mailbox
+    return await get_sync_stats(datetime.now(timezone.utc))

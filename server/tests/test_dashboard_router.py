@@ -141,3 +141,63 @@ def test_requires_login() -> None:
     assert client.get("/dashboard/patterns").status_code == 401
     assert client.get("/dashboard/overview").status_code == 401
     assert client.get("/dashboard/timeline").status_code == 401
+    assert client.get("/dashboard/sync").status_code == 401
+
+
+# --- /dashboard/sync ---
+
+LAST_SYNCED = NOW - timedelta(hours=2)
+
+def _stub_sync_counts(monkeypatch: pytest.MonkeyPatch, last_synced_at: datetime | None) -> None:
+    async def fake_count_email_identifiers() -> int:
+        return 4210
+
+    async def fake_count_emails() -> int:
+        return 318
+
+    async def fake_count_failed_email_ids() -> int:
+        return 2
+
+    async def fake_get_last_synced_at() -> datetime | None:
+        return last_synced_at
+
+    async def fake_get_job_emails() -> list[JobEmail]:
+        # No company and an ATS sender, so it can't be assigned to an application
+        unassigned = JobEmail(
+            emailId="u1",
+            date=MONDAY,
+            applicationStatus=ApplicationStatus.Applied,
+            company="",
+            role="",
+            fromAddress="no-reply@greenhouse.io",
+        )
+        return [*EMAILS, unassigned]
+
+    monkeypatch.setattr(dashboard, "count_email_identifiers", fake_count_email_identifiers)
+    monkeypatch.setattr(dashboard, "count_emails", fake_count_emails)
+    monkeypatch.setattr(dashboard, "count_failed_email_ids", fake_count_failed_email_ids)
+    monkeypatch.setattr(dashboard, "get_last_synced_at", fake_get_last_synced_at)
+    monkeypatch.setattr(dashboard, "get_job_emails", fake_get_job_emails)
+
+def test_sync(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub_sync_counts(monkeypatch, LAST_SYNCED)
+    response = client.get("/dashboard/sync")
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {
+        "totalEmailsScanned", "jobEmails", "unassignedEmails", "failedEmails", "lastSyncedAt", "generatedAt",
+    }
+    assert (body["totalEmailsScanned"], body["jobEmails"], body["unassignedEmails"], body["failedEmails"]) == (
+        4210, 318, 1, 2,
+    )
+    assert datetime.fromisoformat(body["lastSyncedAt"]) == LAST_SYNCED
+    assert datetime.fromisoformat(body["generatedAt"]) >= NOW
+
+def test_sync_never_synced(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub_sync_counts(monkeypatch, None)
+    assert client.get("/dashboard/sync").json()["lastSyncedAt"] is None
+
+def test_sync_ignores_filters(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub_sync_counts(monkeypatch, LAST_SYNCED)
+    body = client.get("/dashboard/sync", params={"companies": "spotify"}).json()
+    assert body["unassignedEmails"] == 1

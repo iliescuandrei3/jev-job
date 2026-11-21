@@ -264,6 +264,33 @@ export interface CompanyDetailOut {
   applications: ApplicationOut[];
 }
 
+/** server/schemas/dashboard.py · SyncOut (GET /dashboard/sync). Unfiltered. */
+export interface SyncOut {
+  /** Every email id a sync has looked at, job or not */
+  totalEmailsScanned: number;
+  jobEmails: number;
+  /** Job emails without a company, so in no application */
+  unassignedEmails: number;
+  failedEmails: number;
+  /** ISO datetime; null before the first finished sync */
+  lastSyncedAt: string | null;
+  generatedAt: string;
+}
+
+/** server/schemas/websocket.py · JobState (messages on /emails/ws/sync/{job_id}) */
+export type JobStatus = "pending" | "running" | "completed" | "failed";
+
+export interface JobState {
+  status: JobStatus;
+  task_name: string;
+  message: string;
+}
+
+/** server/routers/emails.py · POST /emails/refresh (and `detail` of its 409) */
+export interface RefreshResponse {
+  job_id: string;
+}
+
 /** server/routers/auth.py · the session user stored at /auth/callback */
 export interface AuthUser {
   sub: string;

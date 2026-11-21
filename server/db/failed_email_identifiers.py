@@ -25,3 +25,6 @@ async def record_failed_email_id(
         failed_identifier.lastFailedAt = failed_at
 
     await failed_identifier.save()
+
+async def count_failed_email_ids() -> int:
+    return await FailedEmailIdentifier.find_all().count()

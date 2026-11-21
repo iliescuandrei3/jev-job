@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from googleapiclient.errors import HttpError
 
 from server.apis.gmail import GmailClient, HistoryType
@@ -227,5 +229,5 @@ async def sync_emails(ws_manager: ConnectionManager, job_id: str):
         EmailIdentifierData(emailId=email.emailId, isJob=email.isJob)
         for email in emails_with_decisions
     ])
-    # Save the latest history id
-    await update_history_checkpoint(latest_history_id)
+    # Save the latest history id (kept as is when there is none) and the sync time
+    await update_history_checkpoint(latest_history_id, datetime.now(timezone.utc))
