@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from server.schemas.email import ApplicationStatus
 
@@ -36,3 +36,25 @@ class Application(BaseModel):
 class GroupingResult(BaseModel):
     applications: list[Application]
     unassigned: int
+
+class ApplicationEmailOut(BaseModel):
+    emailId: str
+    date: datetime
+    applicationStatus: ApplicationStatus
+    title: str
+    description: str
+
+    model_config = ConfigDict(extra="forbid")
+
+class ApplicationOut(BaseModel):
+    id: str
+    company: str
+    companyKey: str
+    role: str
+    status: Status
+    appliedAt: datetime
+    lastAt: datetime
+    durationDays: float
+    emails: list[ApplicationEmailOut]
+
+    model_config = ConfigDict(extra="forbid")
