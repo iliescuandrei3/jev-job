@@ -9,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from server.db.connection import close_db, init_db, ping_db
 from server.settings import ALLOWED_ORIGINS
-from .routers import auth, dashboard, emails
+from .routers import applications, auth, dashboard, emails
 
 
 load_dotenv()
@@ -41,6 +41,7 @@ app.add_middleware(
 )
 app.include_router(emails.router)
 app.include_router(dashboard.router)
+app.include_router(applications.router)
 app.include_router(auth.router)
 
 @app.get("/test")

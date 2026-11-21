@@ -6,8 +6,8 @@ import {
   type Application,
 } from "@/lib/analytics";
 import { fmtDate } from "@/lib/format";
-import { NOW } from "@/lib/mock-data";
 import { statusColor, statusLabel } from "@/lib/status";
+import type { ApplicationSummary, DateRange } from "@/lib/types";
 import { StatusDot } from "./StatusDot";
 
 const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false } as const;
@@ -184,32 +184,39 @@ export function HourChart({ apps }: { apps: Application[] }) {
 }
 
 /** Gantt-style lanes: each process from first to last email. */
-export function ProcessLanes({ apps, onPick }: { apps: Application[]; onPick: (c: string) => void }) {
-  const recent = [...apps].sort((a, b) => b.appliedAt.getTime() - a.appliedAt.getTime()).slice(0, 18);
-  if (!recent.length) return <p className="text-sm text-muted-foreground">No processes match.</p>;
-  const start = Math.min(...recent.map((a) => a.appliedAt.getTime()));
-  const span = NOW.getTime() - start || 1;
+export function ProcessLanes({
+  items,
+  range,
+  onPick,
+}: {
+  items: ApplicationSummary[];
+  range: DateRange;
+  onPick: (company: string) => void;
+}) {
+  const start = new Date(range.start).getTime();
+  const span = new Date(range.end).getTime() - start || 1;
+  const pos = (date: string) => ((new Date(date).getTime() - start) / span) * 100;
   return (
     <div className="space-y-1.5">
-      {recent.map((a) => {
-        const left = ((a.appliedAt.getTime() - start) / span) * 100;
-        const width = Math.max(1.2, ((a.lastAt.getTime() - a.appliedAt.getTime()) / span) * 100);
+      {items.map((a) => {
+        const left = pos(a.appliedAt);
+        const width = Math.max(1.2, pos(a.lastAt) - left);
         return (
-          <button key={a.threadId} onClick={() => onPick(a.company)} className="group grid w-full grid-cols-[150px_1fr] items-center gap-3 text-left">
+          <button key={a.id} onClick={() => onPick(a.company)} className="group grid w-full grid-cols-[150px_1fr] items-center gap-3 text-left">
             <span className="truncate text-xs">
               <span className="font-medium group-hover:text-primary">{a.company}</span>
-              <span className="text-muted-foreground"> · {a.role.split(" ")[0]}</span>
+              {a.role && <span className="text-muted-foreground"> · {a.role.split(" ")[0]}</span>}
             </span>
             <div className="relative h-5 rounded bg-secondary/50">
               <div
                 className="absolute top-1/2 h-2.5 -translate-y-1/2 rounded-full"
-                style={{ left: `${left}%`, width: `${width}%`, background: statusColor(fromMockStatus(a.status)) }}
+                style={{ left: `${left}%`, width: `${width}%`, background: statusColor(a.status) }}
               />
-              {a.emails.map((e) => (
+              {a.emailDates.map((date, i) => (
                 <span
-                  key={e.emailId}
+                  key={`${date}-${i}`}
                   className="absolute top-1/2 h-3.5 w-0.5 -translate-y-1/2 rounded bg-foreground/70"
-                  style={{ left: `${((new Date(e.date).getTime() - start) / span) * 100}%` }}
+                  style={{ left: `${pos(date)}%` }}
                 />
               ))}
             </div>
@@ -219,7 +226,7 @@ export function ProcessLanes({ apps, onPick }: { apps: Application[]; onPick: (c
       <div className="grid grid-cols-[150px_1fr] gap-3 pt-1 font-mono text-[10px] text-muted-foreground">
         <span />
         <div className="flex justify-between">
-          <span>{fmtDate(new Date(start))}</span>
+          <span>{fmtDate(range.start)}</span>
           <span>today</span>
         </div>
       </div>

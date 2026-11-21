@@ -57,6 +57,37 @@ export interface ApplicationOut {
   emails: ApplicationEmailOut[];
 }
 
+/** server/schemas/application.py · ApplicationSort (`sort` param of GET /applications) */
+export type ApplicationSort = "recent" | "duration" | "lastActivity";
+
+/** server/schemas/application.py · ApplicationSummaryOut (a row of GET /applications) */
+export interface ApplicationSummary {
+  id: string;
+  company: string;
+  companyKey: string;
+  role: string;
+  status: Status;
+  appliedAt: string;
+  lastAt: string;
+  durationDays: number;
+  emailCount: number;
+  emailDates: string[];
+}
+
+/** server/schemas/application.py · DateRangeOut */
+export interface DateRange {
+  start: string;
+  end: string;
+}
+
+/** server/schemas/application.py · ApplicationListOut (GET /applications) */
+export interface ApplicationList {
+  total: number;
+  /** From the earliest appliedAt of `items` to now: the time axis of the process lanes */
+  range: DateRange;
+  items: ApplicationSummary[];
+}
+
 /** server/routers/auth.py · the session user stored at /auth/callback */
 export interface AuthUser {
   sub: string;

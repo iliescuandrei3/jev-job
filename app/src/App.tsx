@@ -17,7 +17,10 @@ import { buildApplications, byCompany, dur, fromMockStatus, insights, kpis } fro
 import { fmtDate, fmtDays, pct } from "@/lib/format";
 import { useDashboardFilters } from "@/hooks/use-dashboard-filters";
 import { useFilterOptions } from "@/hooks/use-filter-options";
+import { useApplications } from "@/hooks/use-applications";
 import { LogoutButton } from "@/components/auth/LogoutButton";
+import { ApplicationsTable } from "@/components/dashboard/ApplicationsTable";
+import { PanelState } from "@/components/dashboard/PanelState";
 import { SearchBar } from "@/components/dashboard/SearchBar";
 import { StatusDot, StatusPill } from "@/components/dashboard/StatusDot";
 import {
@@ -34,10 +37,13 @@ import {
 
 const ALL_APPS = buildApplications(MOCK_EMAILS);
 const ALL_COMPANIES = [...new Set(ALL_APPS.map((a) => a.company))].sort();
+const LANE_COUNT = 18;
 
 export default function App() {
-  const { filters, setFilters } = useDashboardFilters();
+  const { filters, setFilters, queryFilters } = useDashboardFilters();
   const filterOptions = useFilterOptions();
+  const applications = useApplications(queryFilters, { sort: "recent" });
+  const lanes = useApplications(queryFilters, { sort: "recent", limit: LANE_COUNT });
   const [focusCompany, setFocusCompany] = useState<string>(byCompany(ALL_APPS)[0]?.company ?? "");
   // Widgets still read mock data and ignore the filters until their vertical task (04–09)
   const apps = ALL_APPS;
@@ -170,9 +176,19 @@ export default function App() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel
           title="Process timeline"
-          sub="18 most recent processes · ticks are emails · click to inspect"
+          sub={`${LANE_COUNT} most recent processes · ticks are emails · click to inspect`}
         >
-          <ProcessLanes apps={apps} onPick={setFocusCompany} />
+          <PanelState
+            isLoading={lanes.isPending}
+            error={lanes.error}
+            isEmpty={lanes.data?.items.length === 0}
+            emptyText="No processes match."
+            onRetry={() => void lanes.refetch()}
+          >
+            {lanes.data && (
+              <ProcessLanes items={lanes.data.items} range={lanes.data.range} onPick={setFocusCompany} />
+            )}
+          </PanelState>
         </Panel>
         <CompanyDeepDive company={focusCompany} onChange={setFocusCompany} />
       </div>
@@ -214,41 +230,18 @@ export default function App() {
         </div>
       </Panel>
 
-      <Panel title="All processes" sub={`${apps.length} matching`}>
-        <div className="max-h-[420px] overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-card text-left">
-              <tr className="eyebrow">
-                <th className="py-2 font-normal">Company</th>
-                <th className="font-normal">Role</th>
-                <th className="font-normal">Applied</th>
-                <th className="font-normal">Emails</th>
-                <th className="font-normal">Duration</th>
-                <th className="font-normal">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...apps]
-                .sort((a, b) => b.appliedAt.getTime() - a.appliedAt.getTime())
-                .map((a) => (
-                  <tr
-                    key={a.threadId}
-                    onClick={() => setFocusCompany(a.company)}
-                    className="cursor-pointer border-t hover:bg-accent/50"
-                  >
-                    <td className="py-2 font-medium">{a.company}</td>
-                    <td className="text-muted-foreground">{a.role}</td>
-                    <td className="font-mono text-xs">{fmtDate(a.appliedAt)}</td>
-                    <td className="font-mono text-xs">{a.emails.length}</td>
-                    <td className="font-mono text-xs">{fmtDays(dur(a))}</td>
-                    <td>
-                      <StatusPill status={fromMockStatus(a.status)} />
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
+      <Panel
+        title="All processes"
+        sub={applications.data ? `${applications.data.total} matching` : "Every process, newest first"}
+      >
+        <PanelState
+          isLoading={applications.isPending}
+          error={applications.error}
+          isEmpty={applications.data?.items.length === 0}
+          onRetry={() => void applications.refetch()}
+        >
+          {applications.data && <ApplicationsTable items={applications.data.items} onPick={setFocusCompany} />}
+        </PanelState>
       </Panel>
 
       <footer className="pb-4 text-center font-mono text-xs text-muted-foreground">

@@ -6,6 +6,11 @@ from pydantic import BaseModel, ConfigDict
 from server.schemas.email import ApplicationStatus
 
 
+class ApplicationSort(str, Enum):
+    Recent = "recent"
+    Duration = "duration"
+    LastActivity = "lastActivity"
+
 class Status(str, Enum):
     Undefined = "undefined"
     Applied = "applied"
@@ -56,5 +61,33 @@ class ApplicationOut(BaseModel):
     lastAt: datetime
     durationDays: float
     emails: list[ApplicationEmailOut]
+
+    model_config = ConfigDict(extra="forbid")
+
+class ApplicationSummaryOut(BaseModel):
+    """A row of GET /applications: `ApplicationOut` without the emails, plus their count and dates."""
+    id: str
+    company: str
+    companyKey: str
+    role: str
+    status: Status
+    appliedAt: datetime
+    lastAt: datetime
+    durationDays: float
+    emailCount: int
+    emailDates: list[datetime]
+
+    model_config = ConfigDict(extra="forbid")
+
+class DateRangeOut(BaseModel):
+    start: datetime
+    end: datetime
+
+    model_config = ConfigDict(extra="forbid")
+
+class ApplicationListOut(BaseModel):
+    total: int
+    range: DateRangeOut
+    items: list[ApplicationSummaryOut]
 
     model_config = ConfigDict(extra="forbid")

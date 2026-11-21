@@ -1,9 +1,19 @@
 from collections import Counter, defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 
 from server.db.emails import get_job_emails
-from server.schemas.application import Application, ApplicationEmailOut, ApplicationOut, GroupingResult, Status
+from server.schemas.application import (
+    Application,
+    ApplicationEmailOut,
+    ApplicationListOut,
+    ApplicationOut,
+    ApplicationSort,
+    ApplicationSummaryOut,
+    DateRangeOut,
+    GroupingResult,
+    Status,
+)
 from server.schemas.dashboard import CompanyOption, DashboardFilters, FilterOptionsOut
 from server.services.applications import group_into_applications
 from server.services.email_templates import email_text
@@ -58,3 +68,52 @@ def to_application_out(app: Application) -> ApplicationOut:
         durationDays=app.durationDays,
         emails=emails,
     )
+
+_SORT_KEYS: dict[ApplicationSort, Callable[[Application], datetime | float]] = {
+    ApplicationSort.Recent: lambda app: app.appliedAt,
+    ApplicationSort.Duration: lambda app: app.durationDays,
+    ApplicationSort.LastActivity: lambda app: app.lastAt,
+}
+
+def sort_applications(apps: Sequence[Application], sort: ApplicationSort) -> list[Application]:
+    """Descending by the sort field; ties go to the most recent appliedAt, then id, so the order is stable."""
+    by_id = sorted(apps, key=lambda app: app.id)
+    by_applied = sorted(by_id, key=lambda app: app.appliedAt, reverse=True)
+    return sorted(by_applied, key=_SORT_KEYS[sort], reverse=True)
+
+def _to_summary(app: Application) -> ApplicationSummaryOut:
+    return ApplicationSummaryOut(
+        id=app.id,
+        company=app.company,
+        companyKey=app.companyKey,
+        role=app.role,
+        status=app.status,
+        appliedAt=app.appliedAt,
+        lastAt=app.lastAt,
+        durationDays=app.durationDays,
+        emailCount=len(app.emails),
+        emailDates=[email.date for email in app.emails],
+    )
+
+def list_applications(
+    apps: Sequence[Application],
+    sort: ApplicationSort,
+    limit: int | None,
+    offset: int,
+    now: datetime,
+) -> ApplicationListOut:
+    """Sort, then page. `total` counts before paging; `range` spans the returned items up to `now`."""
+    ordered = sort_applications(apps, sort)
+    page = ordered[offset:] if limit is None else ordered[offset:offset + limit]
+    start = min((app.appliedAt for app in page), default=now)
+    return ApplicationListOut(
+        total=len(ordered),
+        range=DateRangeOut(start=start, end=now),
+        items=[_to_summary(app) for app in page],
+    )
+
+def get_application(apps: Sequence[Application], application_id: str) -> ApplicationOut | None:
+    for app in apps:
+        if app.id == application_id:
+            return to_application_out(app)
+    return None
