@@ -1,8 +1,10 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+
+import pytest
 
 from server.schemas.application import Application, ApplicationEmail, Status
 from server.schemas.email import ApplicationStatus
-from server.services.metrics import TOP_ROLES, hours, roles, weekdays
+from server.services.metrics import TOP_ROLES, funnel, hours, insights, kpis, roles, status_breakdown, weekdays
 
 # A Monday
 MONDAY = datetime(2026, 11, 2, tzinfo=timezone.utc)
@@ -126,3 +128,158 @@ def test_hours_counts_interview_and_rejected_emails_only() -> None:
     assert (result[9].interview, result[9].rejected) == (1, 1)
     assert (result[23].interview, result[23].rejected) == (0, 1)
     assert (result[0].interview, result[0].rejected) == (0, 0)
+
+
+# --- overview ---
+
+JAN_29 = datetime(2026, 1, 29, 9, tzinfo=timezone.utc)
+
+
+def _process(
+    app_id: str,
+    company_key: str,
+    role: str,
+    status: Status,
+    applied_at: datetime,
+    duration_days: float,
+    reply_after_days: float | None = None,
+    reached_interview: bool = False,
+) -> Application:
+    return Application(
+        id=app_id,
+        companyKey=company_key,
+        company=company_key.title(),
+        role=role,
+        status=status,
+        appliedAt=applied_at,
+        lastAt=applied_at + timedelta(days=duration_days),
+        firstReplyAt=applied_at + timedelta(days=reply_after_days) if reply_after_days is not None else None,
+        reachedInterview=reached_interview,
+        durationDays=duration_days,
+        emails=[],
+    )
+
+def _day(offset: int) -> datetime:
+    return JAN_29 + timedelta(days=offset)
+
+# Applied Jan 29, 30, 31 and Feb 1 (a 4-day streak across the month boundary), then Feb 10, 12 (twice) and 20
+OVERVIEW_APPS = [
+    _process("a", "spotify", "Backend Engineer", Status.Rejected, _day(0), 10, reply_after_days=10),
+    _process("b", "spotify", "Backend Engineer", Status.Interview, _day(1), 20, reply_after_days=5, reached_interview=True),
+    _process("c", "n26", "Backend Engineer", Status.Accepted, _day(2), 30, reply_after_days=3, reached_interview=True),
+    _process("d", "klarna", "Backend Engineer", Status.Ghosted, _day(3), 0),
+    _process("e", "klarna", "Data Engineer", Status.Rejected, _day(3), 2, reply_after_days=2),
+    _process("f", "zalando", "Data Engineer", Status.Applied, _day(3), 0),
+    _process("g", "zalando", "Data Engineer", Status.OA, _day(12), 4, reply_after_days=4),
+    _process("h", "hellofresh", "", Status.Undefined, _day(14), 1),
+    _process("i", "delivery", "Data Engineer", Status.Rejected, _day(14), 0.5, reply_after_days=0.5),
+    _process("j", "miro", "", Status.Ghosted, _day(22), 0),
+]
+
+
+def test_kpis() -> None:
+    result = kpis(OVERVIEW_APPS)
+    assert result.applications == 10
+    assert result.open == 4  # applied, online_assesment, interview, undefined
+    assert result.companies == 7
+    assert result.repeatCompanies == 3  # spotify, klarna, zalando
+    assert result.responseRate == pytest.approx(0.6)
+    assert result.medianReplyDays == pytest.approx(3.5)  # median of 0.5, 2, 3, 4, 5, 10
+    assert result.interviewRate == pytest.approx(0.2)
+    assert result.offers == 1
+    assert result.offerRate == pytest.approx(0.1)
+    assert result.ghostRate == pytest.approx(0.2)
+    assert result.medianRejectionDays == pytest.approx(2)  # median of 0.5, 2, 10
+
+def test_funnel() -> None:
+    result = funnel(OVERVIEW_APPS)
+    assert [(s.stage, s.value) for s in result] == [("applied", 10), ("replied", 6), ("interview", 2), ("offer", 1)]
+    assert result[0].conversion is None
+    assert result[1].conversion == pytest.approx(0.6)
+    assert result[2].conversion == pytest.approx(2 / 6)
+    assert result[3].conversion == pytest.approx(0.5)
+
+def test_status_breakdown_in_fixed_order() -> None:
+    result = status_breakdown(OVERVIEW_APPS)
+    assert [(s.status, s.value) for s in result] == [
+        (Status.Applied, 1),
+        (Status.OA, 1),
+        (Status.Interview, 1),
+        (Status.Accepted, 1),
+        (Status.Rejected, 3),
+        (Status.Ghosted, 2),
+        (Status.Undefined, 1),
+    ]
+    assert result[4].share == pytest.approx(0.3)
+    assert sum(s.share for s in result) == pytest.approx(1)
+
+def test_status_breakdown_omits_zero_counts() -> None:
+    result = status_breakdown([_process("a", "spotify", "", Status.Rejected, JAN_29, 1)])
+    assert [(s.status, s.value, s.share) for s in result] == [(Status.Rejected, 1, 1.0)]
+
+def test_insights() -> None:
+    result = insights(OVERVIEW_APPS)
+    assert result.fastestRejection is not None
+    assert (result.fastestRejection.applicationId, result.fastestRejection.company) == ("i", "Delivery")
+    assert result.fastestRejection.role == "Data Engineer"
+    assert result.fastestRejection.days == 0.5
+    assert result.longestProcess is not None
+    assert (result.longestProcess.applicationId, result.longestProcess.status) == ("c", Status.Accepted)
+    assert result.longestProcess.days == 30
+    assert result.bestStreakDays == 4
+    assert result.busiestDay is not None
+    assert (result.busiestDay.date, result.busiestDay.count) == (date(2026, 2, 1), 3)
+    assert result.bestRole is not None
+    assert (result.bestRole.role, result.bestRole.interviewRate) == ("Backend Engineer", 0.5)
+
+def test_streak_across_month_boundary() -> None:
+    feb_27 = datetime(2026, 2, 27, 23, tzinfo=timezone.utc)
+    # Feb 27, Feb 28, Mar 1 (2026 is not a leap year), then a gap
+    apps = [_process(str(i), "spotify", "", Status.Applied, feb_27 + timedelta(days=i), 0) for i in range(3)]
+    apps.append(_process("x", "spotify", "", Status.Applied, datetime(2026, 3, 5, tzinfo=timezone.utc), 0))
+    assert insights(apps).bestStreakDays == 3
+
+def test_streak_and_busiest_day_use_utc_days() -> None:
+    # 23:00 and 01:00 the next day are two days; 01:00 and 20:00 on the same day are one
+    apps = [
+        _process("a", "spotify", "", Status.Applied, datetime(2026, 3, 1, 23, tzinfo=timezone.utc), 0),
+        _process("b", "spotify", "", Status.Applied, datetime(2026, 3, 2, 1, tzinfo=timezone.utc), 0),
+        _process("c", "spotify", "", Status.Applied, datetime(2026, 3, 2, 20, tzinfo=timezone.utc), 0),
+    ]
+    result = insights(apps)
+    assert result.bestStreakDays == 2
+    assert result.busiestDay is not None
+    assert (result.busiestDay.date, result.busiestDay.count) == (date(2026, 3, 2), 2)
+
+def test_best_role_needs_four_applications_and_a_role() -> None:
+    apps = [_process(f"u{i}", "spotify", "", Status.Interview, JAN_29, 1, reached_interview=True) for i in range(5)]
+    apps += [_process(f"b{i}", "n26", "Backend Engineer", Status.Applied, JAN_29, 1) for i in range(3)]
+    assert insights(apps).bestRole is None
+
+def test_best_role_tie_goes_to_more_applications() -> None:
+    apps = [
+        _process(f"b{i}", "n26", "Backend Engineer", Status.Interview, JAN_29, 1, reached_interview=i < 2)
+        for i in range(4)
+    ]
+    apps += [
+        _process(f"d{i}", "n26", "Data Engineer", Status.Interview, JAN_29, 1, reached_interview=i < 3)
+        for i in range(6)
+    ]
+    result = insights(apps).bestRole
+    assert result is not None
+    assert (result.role, result.interviewRate) == ("Data Engineer", 0.5)
+
+def test_overview_empty_input() -> None:
+    k = kpis([])
+    assert (k.applications, k.open, k.companies, k.repeatCompanies, k.offers) == (0, 0, 0, 0, 0)
+    assert (k.responseRate, k.interviewRate, k.offerRate, k.ghostRate) == (0, 0, 0, 0)
+    assert k.medianReplyDays is None
+    assert k.medianRejectionDays is None
+    assert [(s.value, s.conversion) for s in funnel([])] == [(0, None), (0, 0), (0, 0), (0, 0)]
+    assert status_breakdown([]) == []
+    result = insights([])
+    assert result.fastestRejection is None
+    assert result.longestProcess is None
+    assert result.bestStreakDays == 0
+    assert result.busiestDay is None
+    assert result.bestRole is None

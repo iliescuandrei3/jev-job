@@ -82,7 +82,32 @@ def test_patterns_are_filtered(client: TestClient) -> None:
     assert [r["role"] for r in body["roles"]] == ["Data Engineer"]
     assert sum(d["applied"] for d in body["weekdays"]) == 1
 
+def test_overview(client: TestClient) -> None:
+    response = client.get("/dashboard/overview")
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {"kpis", "funnel", "statusBreakdown", "insights"}
+    assert body["kpis"]["applications"] == 3
+    assert body["kpis"]["open"] == 2  # Spotify (interview) and Klarna (applied)
+    assert body["kpis"]["medianRejectionDays"] == pytest.approx(3.25)  # N26: Tue 10:00 → Fri 16:00
+    assert [(s["stage"], s["value"], s["conversion"]) for s in body["funnel"]] == [
+        ("applied", 3, None), ("replied", 2, pytest.approx(2 / 3)), ("interview", 1, 0.5), ("offer", 0, 0.0),
+    ]
+    assert [s["status"] for s in body["statusBreakdown"]] == ["applied", "interview", "rejected"]
+    assert body["insights"]["fastestRejection"]["company"] == "N26"
+    assert body["insights"]["busiestDay"] == {"date": (MONDAY + timedelta(days=1)).date().isoformat(), "count": 2}
+    assert body["insights"]["bestRole"] is None
+
+def test_overview_is_filtered(client: TestClient) -> None:
+    body = client.get("/dashboard/overview", params={"companies": ["n26"]}).json()
+    assert body["kpis"]["applications"] == 1
+    assert body["statusBreakdown"] == [{"status": "rejected", "value": 1, "share": 1.0}]
+    body = client.get("/dashboard/overview", params={"statuses": ["ghosted"]}).json()
+    assert body["kpis"]["applications"] == 0
+    assert body["insights"]["longestProcess"] is None
+
 def test_requires_login() -> None:
     client = TestClient(_app())
     assert client.get("/dashboard/filters").status_code == 401
     assert client.get("/dashboard/patterns").status_code == 401
+    assert client.get("/dashboard/overview").status_code == 401

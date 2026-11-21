@@ -1,26 +1,16 @@
 import { useState } from "react";
-import {
-  Activity,
-  Building2,
-  CalendarClock,
-  Flame,
-  Ghost,
-  MessageSquareReply,
-  Repeat,
-  Rocket,
-  Timer,
-  Trophy,
-  Zap,
-} from "lucide-react";
+import { Repeat } from "lucide-react";
 import { MOCK_EMAILS } from "@/lib/mock-data";
-import { buildApplications, byCompany, dur, fromMockStatus, insights, kpis } from "@/lib/analytics";
-import { fmtDate, fmtDays, pct } from "@/lib/format";
+import { buildApplications, byCompany, fromMockStatus } from "@/lib/analytics";
+import { fmtDate } from "@/lib/format";
 import { useDashboardFilters } from "@/hooks/use-dashboard-filters";
 import { useFilterOptions } from "@/hooks/use-filter-options";
 import { useApplications } from "@/hooks/use-applications";
+import { useOverview } from "@/hooks/use-overview";
 import { usePatterns } from "@/hooks/use-patterns";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { ApplicationsTable } from "@/components/dashboard/ApplicationsTable";
+import { InsightsStrip, StatTiles } from "@/components/dashboard/Overview";
 import { PanelState } from "@/components/dashboard/PanelState";
 import { SearchBar } from "@/components/dashboard/SearchBar";
 import { StatusDot, StatusPill } from "@/components/dashboard/StatusDot";
@@ -35,6 +25,7 @@ import {
   WeekdayChart,
   WeeklyChart,
 } from "@/components/dashboard/Charts";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const ALL_APPS = buildApplications(MOCK_EMAILS);
 const ALL_COMPANIES = [...new Set(ALL_APPS.map((a) => a.company))].sort();
@@ -46,41 +37,11 @@ export default function App() {
   const applications = useApplications(queryFilters, { sort: "recent" });
   const lanes = useApplications(queryFilters, { sort: "recent", limit: LANE_COUNT });
   const patterns = usePatterns(queryFilters);
+  const overview = useOverview(queryFilters);
   const [focusCompany, setFocusCompany] = useState<string>(byCompany(ALL_APPS)[0]?.company ?? "");
   // Widgets still read mock data and ignore the filters until their vertical task (04–09)
   const apps = ALL_APPS;
-  const k = kpis(apps);
-  const ins = insights(apps);
   const companies = byCompany(apps);
-
-  const stats = [
-    { icon: Rocket, label: "Applications", value: k.total, hint: `${k.active} still open` },
-    {
-      icon: Building2,
-      label: "Companies",
-      value: k.companies,
-      hint: `${ins.repeat} applied to twice+`,
-    },
-    {
-      icon: MessageSquareReply,
-      label: "Response rate",
-      value: pct(k.responseRate),
-      hint: `median reply ${fmtDays(k.medianReply)}`,
-    },
-    {
-      icon: Activity,
-      label: "Interview rate",
-      value: pct(k.interviewRate),
-      hint: "reached ≥1 interview",
-    },
-    {
-      icon: Trophy,
-      label: "Offers",
-      value: k.offers,
-      hint: `${pct(k.offers / (k.total || 1))} conversion`,
-    },
-    { icon: Ghost, label: "Ghosted", value: pct(k.ghostRate), hint: "no reply after 21d" },
-  ];
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 md:px-8">
@@ -102,22 +63,20 @@ export default function App() {
 
       <SearchBar filters={filters} onChange={setFilters} options={filterOptions.data} />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        {stats.map((s, i) => (
-          <div
-            key={s.label}
-            className="panel animate-rise p-4"
-            style={{ animationDelay: `${i * 50}ms` }}
-          >
-            <div className="flex items-center gap-2">
-              <s.icon className="h-4 w-4 text-primary" />
-              <span className="eyebrow">{s.label}</span>
-            </div>
-            <div className="mt-3 text-3xl font-bold tabular-nums">{s.value}</div>
-            <div className="mt-1 text-xs text-muted-foreground">{s.hint}</div>
+      <PanelState
+        isLoading={overview.isPending}
+        error={overview.error}
+        onRetry={() => void overview.refetch()}
+        skeleton={
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+            {Array.from({ length: 6 }, (_, i) => (
+              <Skeleton key={i} className="h-[108px] rounded-xl" />
+            ))}
           </div>
-        ))}
-      </div>
+        }
+      >
+        {overview.data && <StatTiles kpis={overview.data.kpis} />}
+      </PanelState>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel
@@ -128,7 +87,14 @@ export default function App() {
           <WeeklyChart apps={apps} />
         </Panel>
         <Panel title="Conversion funnel" sub="Stage-to-stage drop-off">
-          <Funnel apps={apps} />
+          <PanelState
+            isLoading={overview.isPending}
+            error={overview.error}
+            isEmpty={overview.data?.kpis.applications === 0}
+            onRetry={() => void overview.refetch()}
+          >
+            {overview.data && <Funnel stages={overview.data.funnel} />}
+          </PanelState>
         </Panel>
       </div>
 
@@ -141,39 +107,34 @@ export default function App() {
           <Heatmap apps={apps} />
         </Panel>
         <Panel title="Where things stand" sub="Current status of every process">
-          <StatusDonut apps={apps} />
+          <PanelState
+            isLoading={overview.isPending}
+            error={overview.error}
+            isEmpty={overview.data?.statusBreakdown.length === 0}
+            onRetry={() => void overview.refetch()}
+          >
+            {overview.data && (
+              <StatusDonut data={overview.data.statusBreakdown} total={overview.data.kpis.applications} />
+            )}
+          </PanelState>
         </Panel>
       </div>
 
       {/* Insights strip */}
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <Insight
-          icon={Zap}
-          label="Fastest rejection"
-          value={ins.fastest ? fmtDays(dur(ins.fastest)) : "—"}
-          detail={ins.fastest ? `${ins.fastest.company} · ${ins.fastest.role}` : "No rejections 🎉"}
-        />
-        <Insight
-          icon={Timer}
-          label="Longest process"
-          value={ins.longest ? fmtDays(dur(ins.longest)) : "—"}
-          detail={ins.longest ? `${ins.longest.company} · ${ins.longest.status}` : ""}
-        />
-        <Insight
-          icon={Flame}
-          label="Best streak"
-          value={`${ins.best} days`}
-          detail={
-            ins.busiest ? `Busiest day: ${ins.busiest[1]} apps on ${fmtDate(ins.busiest[0])}` : ""
-          }
-        />
-        <Insight
-          icon={CalendarClock}
-          label="Best-converting role"
-          value={ins.bestRole ? `${ins.bestRole.interviewRate}%` : "—"}
-          detail={ins.bestRole ? `${ins.bestRole.role} → interview` : "Need more data"}
-        />
-      </div>
+      <PanelState
+        isLoading={overview.isPending}
+        error={overview.error}
+        onRetry={() => void overview.refetch()}
+        skeleton={
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} className="h-[92px] rounded-xl" />
+            ))}
+          </div>
+        }
+      >
+        {overview.data && <InsightsStrip insights={overview.data.insights} />}
+      </PanelState>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel
@@ -261,27 +222,6 @@ export default function App() {
         mock data · wire up your Mongo API in src/lib/mock-data.ts
       </footer>
     </main>
-  );
-}
-
-function Insight({
-  icon: Icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: typeof Zap;
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="panel relative overflow-hidden p-4">
-      <Icon className="absolute -right-2 -top-2 h-16 w-16 text-primary opacity-10" />
-      <span className="eyebrow">{label}</span>
-      <div className="mt-2 text-2xl font-bold text-primary">{value}</div>
-      <div className="mt-1 truncate text-xs text-muted-foreground">{detail}</div>
-    </div>
   );
 }
 

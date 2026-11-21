@@ -1,4 +1,4 @@
-import { fmtDate, fmtDays } from "@/lib/format";
+import { fmtDate, fmtDays, roleLabel } from "@/lib/format";
 import type { ApplicationSummary } from "@/lib/types";
 import { StatusPill } from "./StatusDot";
 
@@ -31,7 +31,7 @@ export function ApplicationsTable({
               className="cursor-pointer border-t hover:bg-accent/50"
             >
               <td className="py-2 font-medium">{a.company}</td>
-              <td className="text-muted-foreground">{a.role}</td>
+              <td className="text-muted-foreground">{roleLabel(a.role)}</td>
               <td className="font-mono text-xs">{fmtDate(a.appliedAt)}</td>
               <td className="font-mono text-xs">{a.emailCount}</td>
               <td className="font-mono text-xs">{fmtDays(a.durationDays)}</td>

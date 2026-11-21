@@ -129,6 +129,92 @@ export interface PatternsOut {
   hours: HourStat[];
 }
 
+/** server/schemas/dashboard.py · KpisOut. Rates are 0–1. */
+export interface Kpis {
+  applications: number;
+  /** applied, online_assesment, interview or undefined */
+  open: number;
+  companies: number;
+  /** Companies with more than one application */
+  repeatCompanies: number;
+  responseRate: number;
+  /** null without any reply */
+  medianReplyDays: number | null;
+  interviewRate: number;
+  offers: number;
+  offerRate: number;
+  ghostRate: number;
+  /** null without any rejection */
+  medianRejectionDays: number | null;
+}
+
+/** server/schemas/dashboard.py · FunnelStage */
+export type FunnelStageName = "applied" | "replied" | "interview" | "offer";
+
+/** server/schemas/dashboard.py · FunnelStageOut */
+export interface FunnelStage {
+  stage: FunnelStageName;
+  value: number;
+  /** 0–1 from the previous stage; null for the first */
+  conversion: number | null;
+}
+
+/** server/schemas/dashboard.py · StatusShareOut */
+export interface StatusShare {
+  status: Status;
+  value: number;
+  /** 0–1 of all applications */
+  share: number;
+}
+
+/** server/schemas/dashboard.py · FastestRejectionOut */
+export interface FastestRejection {
+  applicationId: string;
+  company: string;
+  role: string;
+  days: number;
+}
+
+/** server/schemas/dashboard.py · LongestProcessOut */
+export interface LongestProcess {
+  applicationId: string;
+  company: string;
+  status: Status;
+  days: number;
+}
+
+/** server/schemas/dashboard.py · BusiestDayOut */
+export interface BusiestDay {
+  /** YYYY-MM-DD, UTC */
+  date: string;
+  count: number;
+}
+
+/** server/schemas/dashboard.py · BestRoleOut */
+export interface BestRole {
+  role: string;
+  /** 0–1 */
+  interviewRate: number;
+}
+
+/** server/schemas/dashboard.py · InsightsOut */
+export interface Insights {
+  fastestRejection: FastestRejection | null;
+  longestProcess: LongestProcess | null;
+  bestStreakDays: number;
+  busiestDay: BusiestDay | null;
+  /** null unless some role has at least 4 applications */
+  bestRole: BestRole | null;
+}
+
+/** server/schemas/dashboard.py · OverviewOut (GET /dashboard/overview) */
+export interface OverviewOut {
+  kpis: Kpis;
+  funnel: FunnelStage[];
+  statusBreakdown: StatusShare[];
+  insights: Insights;
+}
+
 /** server/routers/auth.py · the session user stored at /auth/callback */
 export interface AuthUser {
   sub: string;

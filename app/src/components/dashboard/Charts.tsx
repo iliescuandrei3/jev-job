@@ -2,12 +2,14 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  STATUSES, fromMockStatus, funnel, heatmap, statusBreakdown, weekly,
+  STATUSES, fromMockStatus, heatmap, weekly,
   type Application,
 } from "@/lib/analytics";
-import { fmtDate, fmtWeekday, roleLabel } from "@/lib/format";
+import { UNKNOWN_ROLE_LABEL, fmtDate, fmtWeekday, pct, roleLabel } from "@/lib/format";
 import { statusColor, statusLabel } from "@/lib/status";
-import type { ApplicationSummary, DateRange, HourStat, RoleStat, WeekdayStat } from "@/lib/types";
+import type {
+  ApplicationSummary, DateRange, FunnelStage, FunnelStageName, HourStat, RoleStat, StatusShare, WeekdayStat,
+} from "@/lib/types";
 import { StatusDot } from "./StatusDot";
 
 const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false } as const;
@@ -29,18 +31,24 @@ export function Panel({ title, sub, children, className = "" }: { title: string;
   );
 }
 
-export function Funnel({ apps }: { apps: Application[] }) {
-  const data = funnel(apps);
-  const max = data[0]!.value || 1;
+const FUNNEL_LABELS: Record<FunnelStageName, string> = {
+  applied: "Applied",
+  replied: "Got a reply",
+  interview: "Interview",
+  offer: "Offer",
+};
+
+export function Funnel({ stages }: { stages: FunnelStage[] }) {
+  const max = stages[0]?.value || 1;
   return (
     <div className="space-y-3">
-      {data.map((d, i) => (
+      {stages.map((d, i) => (
         <div key={d.stage}>
           <div className="mb-1 flex justify-between text-xs">
-            <span>{d.stage}</span>
+            <span>{FUNNEL_LABELS[d.stage]}</span>
             <span className="font-mono text-muted-foreground">
               {d.value}
-              {i > 0 && <span className="ml-2 text-primary">{Math.round((d.value / (data[i - 1]!.value || 1)) * 100)}%</span>}
+              {d.conversion !== null && <span className="ml-2 text-primary">{pct(d.conversion)}</span>}
             </span>
           </div>
           <div className="h-7 overflow-hidden rounded-md bg-secondary">
@@ -72,16 +80,16 @@ export function WeeklyChart({ apps }: { apps: Application[] }) {
   );
 }
 
-export function StatusDonut({ apps }: { apps: Application[] }) {
-  const data = statusBreakdown(apps);
-  const total = apps.length;
+export function StatusDonut({ data, total }: { data: StatusShare[]; total: number }) {
+  // The tooltip shows `nameKey`, so give it the label rather than the raw status
+  const slices = data.map((d) => ({ ...d, label: statusLabel(d.status) }));
   return (
     <div className="flex items-center gap-4">
       <div className="relative h-44 w-44 shrink-0">
         <ResponsiveContainer>
           <PieChart>
-            <Pie data={data} dataKey="value" nameKey="status" innerRadius={55} outerRadius={80} paddingAngle={2} stroke="none">
-              {data.map((d) => <Cell key={d.status} fill={statusColor(fromMockStatus(d.status))} />)}
+            <Pie data={slices} dataKey="value" nameKey="label" innerRadius={55} outerRadius={80} paddingAngle={2} stroke="none">
+              {slices.map((d) => <Cell key={d.status} fill={statusColor(d.status)} />)}
             </Pie>
             <Tooltip {...tooltip} />
           </PieChart>
@@ -94,9 +102,9 @@ export function StatusDonut({ apps }: { apps: Application[] }) {
       <ul className="flex-1 space-y-2 text-sm">
         {data.map((d) => (
           <li key={d.status} className="flex items-center gap-2">
-            <StatusDot status={fromMockStatus(d.status)} />
-            {statusLabel(fromMockStatus(d.status))}
-            <span className="ml-auto font-mono text-muted-foreground">{Math.round((d.value / (total || 1)) * 100)}%</span>
+            <StatusDot status={d.status} />
+            {statusLabel(d.status)}
+            <span className="ml-auto font-mono text-muted-foreground">{pct(d.share)}</span>
           </li>
         ))}
       </ul>
@@ -206,7 +214,7 @@ export function ProcessLanes({
           <button key={a.id} onClick={() => onPick(a.company)} className="group grid w-full grid-cols-[150px_1fr] items-center gap-3 text-left">
             <span className="truncate text-xs">
               <span className="font-medium group-hover:text-primary">{a.company}</span>
-              {a.role && <span className="text-muted-foreground"> · {a.role.split(" ")[0]}</span>}
+              <span className="text-muted-foreground"> · {a.role ? a.role.split(" ")[0] : UNKNOWN_ROLE_LABEL}</span>
             </span>
             <div className="relative h-5 rounded bg-secondary/50">
               <div
