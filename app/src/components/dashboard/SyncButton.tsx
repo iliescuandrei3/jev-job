@@ -21,16 +21,7 @@ export function SyncButton({
   const isBusy = isStarting || isRunning;
 
   return (
-    <div className="flex flex-col items-end gap-1 text-sm">
-      <button
-        type="button"
-        onClick={onSync}
-        disabled={isBusy}
-        className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors hover:border-primary disabled:opacity-50"
-      >
-        <RefreshCw className={cn("h-3.5 w-3.5", isBusy && "animate-spin")} />
-        {isStarting ? "Starting sync…" : isRunning ? "Syncing…" : "Sync now"}
-      </button>
+    <div className="flex items-center gap-3 text-sm">
       <p aria-live="polite" className="max-w-xs text-right text-xs">
         {error ? (
           <span className="text-destructive">Sync could not start. {error.message}</span>
@@ -43,6 +34,15 @@ export function SyncButton({
         )}
         {connectionMessage && <span className="block text-muted-foreground">{connectionMessage}</span>}
       </p>
+      <button
+        type="button"
+        onClick={onSync}
+        disabled={isBusy}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors hover:border-primary disabled:opacity-50"
+      >
+        <RefreshCw className={cn("h-3.5 w-3.5", isBusy && "animate-spin")} />
+        {isStarting ? "Starting sync…" : isRunning ? "Syncing…" : "Sync now"}
+      </button>
     </div>
   );
 }

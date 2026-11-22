@@ -54,21 +54,19 @@ export default function App() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">
-            job hunt telemetry
             {syncStats.data && (
               <>
-                {" "}
-                · {syncStats.data.jobEmails} emails parsed ·{" "}
+                {syncStats.data.jobEmails} emails parsed ·{" "}
                 {syncStats.data.lastSyncedAt ? `last synced ${fmtRelative(syncStats.data.lastSyncedAt)}` : "never synced"}
               </>
             )}
           </p>
           <h1 className="mt-1 text-4xl font-bold tracking-tight md:text-5xl">
-            Pipeline<span className="text-primary">.</span>
+            jev-job<span className="text-primary">.</span>
           </h1>
         </div>
         <div className="flex flex-col items-end gap-3">
-          <div className="flex items-start gap-3">
+          <div className="flex items-center gap-3">
             <SyncButton
               onSync={sync.start}
               isStarting={sync.isStarting}
