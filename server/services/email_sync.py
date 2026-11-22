@@ -1,6 +1,12 @@
 from datetime import datetime, timezone
 
+import openai
 from googleapiclient.errors import HttpError
+from typesafe_sdk import (
+    TypeSafeBadRequestError,
+    TypeSafePermissionDeniedError,
+    TypeSafeUnprocessableEntityError,
+)
 
 from server.apis.gmail import GmailClient, HistoryType
 from server.apis.openrouter import openrouter
@@ -16,6 +22,19 @@ from server.services.email_status import get_email_status
 from server.websocket import ConnectionManager
 
 _IS_JOB_THRESHOLD = 0.5
+
+# Rejections of a single email (content filter, invalid input). The email is recorded as failed
+# and skipped. Anything else (auth, rate limit, network, 5xx) is systemic and still aborts the sync.
+_DECISION_REJECTIONS = (
+    TypeSafeBadRequestError,
+    TypeSafePermissionDeniedError,
+    TypeSafeUnprocessableEntityError,
+)
+_STATUS_REJECTIONS = (
+    openai.BadRequestError,
+    openai.PermissionDeniedError,
+    openai.UnprocessableEntityError,
+)
 
 async def _get_emails_ids(gmail_client: GmailClient, ws_manager: ConnectionManager, job_id: str) -> list[str]:
     emails_ids = []
@@ -142,22 +161,47 @@ async def _get_labels(gmail_client: GmailClient, ws_manager: ConnectionManager, 
 
     return await gmail_client.get_labels()
 
+async def _skip_rejected_email(
+    ws_manager: ConnectionManager,
+    job_id: str,
+    email: ParsedEmail,
+    step: str,
+    status_code: int,
+    error: Exception,
+) -> None:
+    await record_failed_email_id(email.emailId, status_code, f"{step} rejected: {error}")
+    await ws_manager.broadcast_progress(
+        job_id,
+        JobState(
+            status="running",
+            task_name="Sync emails",
+            message=f"Message {email.emailId} was rejected by the {step} step; recorded and skipped.",
+        ),
+    )
+
 async def _make_decisions(ws_manager: ConnectionManager, job_id: str, emails: list[ParsedEmail]) -> list[ParsedEmail]:
+    decided = []
     for count, email in enumerate(emails):
         await ws_manager.broadcast_progress(
-            job_id, 
+            job_id,
             JobState(
-                status="running", 
-                task_name="Sync emails", 
+                status="running",
+                task_name="Sync emails",
                 message=f"Awaiting email decisions {count + 1}/{len(emails)}."
             )
         )
-        decision = await decide_email_application(email)
+        try:
+            decision = await decide_email_application(email)
+        except _DECISION_REJECTIONS as exc:
+            await _skip_rejected_email(ws_manager, job_id, email, "decision", exc.status, exc)
+            continue
         email.isJob = decision.nouls["isJob"].noul
-    
-    return emails
+        decided.append(email)
+
+    return decided
 
 async def _get_email_status(ws_manager: ConnectionManager, job_id: str, emails: list[ParsedEmail]) -> list[ParsedEmail]:
+    with_status = []
     async with openrouter() as client:
         for count, email in enumerate(emails):
             await ws_manager.broadcast_progress(
@@ -168,12 +212,17 @@ async def _get_email_status(ws_manager: ConnectionManager, job_id: str, emails: 
                     message=f"Awaiting email statuses {count + 1}/{len(emails)}."
                 )
             )
-            email_status = await get_email_status(client, email)
+            try:
+                email_status = await get_email_status(client, email)
+            except _STATUS_REJECTIONS as exc:
+                await _skip_rejected_email(ws_manager, job_id, email, "status", exc.status_code, exc)
+                continue
             email.applicationStatus = email_status.applicationStatus
             email.company = email_status.company
             email.role = email_status.role
+            with_status.append(email)
 
-    return emails
+    return with_status
         
 
 async def sync_emails(ws_manager: ConnectionManager, job_id: str):
@@ -224,10 +273,13 @@ async def sync_emails(ws_manager: ConnectionManager, job_id: str):
     
     # Save to db
     await add_emails(emails_with_status)
-    # Save all email ids (job/non-job) for later deduplication
+    # Save all email ids (job/non-job) for later deduplication. Job emails rejected by the status
+    # step are left out, so they stay only in failed-email-identifiers and can be retried later.
+    status_rejected_ids = {email.emailId for email in job_emails} - {email.emailId for email in emails_with_status}
     await add_email_identifiers([
         EmailIdentifierData(emailId=email.emailId, isJob=email.isJob)
         for email in emails_with_decisions
+        if email.emailId not in status_rejected_ids
     ])
     # Save the latest history id (kept as is when there is none) and the sync time
     await update_history_checkpoint(latest_history_id, datetime.now(timezone.utc))

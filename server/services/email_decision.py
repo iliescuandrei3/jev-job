@@ -4,9 +4,19 @@ from typesafe_sdk import Noul
 
 from server.apis.jev import decide
 from server.schemas.email import ParsedEmail
+from server.services.redact import redact
+
+_TEXT_FIELDS = ("subject", "snippet", "fromName", "fromAddress", "toName", "toAddress")
+
+def _decision_state(email: ParsedEmail) -> dict[str, Any]:
+    state = email.model_dump(exclude={"content"})
+    # Only the body is redacted at parse time, so redact the other free-text fields before sending them
+    for field in _TEXT_FIELDS:
+        state[field] = redact(state[field])
+    return state
 
 async def decide_email_application(email: ParsedEmail) -> Any:
-    state = email.model_dump(exclude={"content"})
+    state = _decision_state(email)
     questions = {
         "isJob": Noul(
             instructions = "Is this email from a job application or a response from a job application?", 
